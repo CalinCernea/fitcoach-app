@@ -1,7 +1,7 @@
 // app/(marketing)/page.js
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Target, Zap, HeartPulse } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 export default function LandingPage() {
   return (
@@ -14,8 +14,8 @@ export default function LandingPage() {
           </h1>
           <p className="mt-6 max-w-2xl mx-auto text-lg lg:text-xl text-slate-600 dark:text-slate-400">
             Your personalized fitness and nutrition plan is one click away. We
-            do the math, you do the work. Get the body you've always wanted,
-            guided by science.
+            do the math, you do the work. Get the body you&apos;ve always
+            wanted, guided by science.
           </p>
           <div className="mt-8 flex justify-center gap-4">
             <Button
