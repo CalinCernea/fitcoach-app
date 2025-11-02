@@ -3,6 +3,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/utils/supabase";
 import { generateAdvancedMealPlan } from "@/utils/advancedMealPlanner";
 
@@ -29,6 +30,7 @@ import {
   CheckCircle,
   ChevronLeft,
   ChevronRight,
+  User,
 } from "lucide-react";
 
 // --- Helper Functions ---
@@ -173,9 +175,19 @@ export default function DashboardPage() {
           </h1>
           <p className="text-slate-500">Your meal plan dashboard.</p>
         </div>
-        <Button variant="ghost" onClick={handleLogout}>
-          <LogOut className="mr-2 h-4 w-4" /> Logout
-        </Button>
+        <div className="flex items-center gap-2">
+          {" "}
+          {/* <-- Wrapper nou */}
+          <Button variant="outline" size="icon" asChild>
+            <Link href="/profile">
+              <User className="h-4 w-4" />
+              <span className="sr-only">Profile</span>
+            </Link>
+          </Button>
+          <Button variant="ghost" onClick={handleLogout}>
+            <LogOut className="mr-2 h-4 w-4" /> Logout
+          </Button>
+        </div>
       </header>
 
       {/* --- Date Navigator --- */}

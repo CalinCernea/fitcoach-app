@@ -1,5 +1,5 @@
 // utils/supabase.js
-import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs'
+import { createPagesBrowserClient } from "@supabase/auth-helpers-nextjs";
 
 // Folosim createPagesBrowserClient deoarece suntem într-un mediu client-side (nu server-side)
 // pentru a simplifica setup-ul inițial.
