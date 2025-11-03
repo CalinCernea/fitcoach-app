@@ -24,13 +24,16 @@ function addIngredientToMeal(meal, component, amountGrams) {
   return nutrients;
 }
 
+// --- MODIFICARE 1: Adăugăm 'mealType' ca parametru ---
 function generateSingleMealCascade(
   template,
   targetMealCalories,
-  targetMealMacros
+  targetMealMacros,
+  mealType
 ) {
   const meal = {
     name: template.name,
+    type: mealType, // <-- Salvăm tipul mesei
     total_calories: 0,
     total_protein: 0,
     total_carbs: 0,
@@ -46,7 +49,6 @@ function generateSingleMealCascade(
 
     let neededGrams;
     if (macroName === "p") {
-      // Țintim doar 85% din necesarul de proteine, lăsând loc pentru cele din alte surse
       neededGrams = ((remainingMacros.p * 0.85) / component.protein) * 100;
     } else {
       neededGrams = (remainingMacros[macroName] / component[targetMacro]) * 100;
@@ -105,20 +107,24 @@ export function generateAdvancedMealPlan(profile) {
         Math.floor(Math.random() * mealTemplates.dinner.length)
       ];
 
+    // --- MODIFICARE 2: Pasăm tipul mesei la generare ---
     const breakfast = generateSingleMealCascade(
       breakfastTemplate,
       targetCalories * mealDistribution.breakfast,
-      breakfastTargets
+      breakfastTargets,
+      "breakfast" // <-- Pasăm tipul
     );
     const lunch = generateSingleMealCascade(
       lunchTemplate,
       targetCalories * mealDistribution.lunch,
-      lunchTargets
+      lunchTargets,
+      "lunch" // <-- Pasăm tipul
     );
     const dinner = generateSingleMealCascade(
       dinnerTemplate,
       targetCalories * mealDistribution.dinner,
-      dinnerTargets
+      dinnerTargets,
+      "dinner" // <-- Pasăm tipul
     );
 
     const currentPlan = [breakfast, lunch, dinner];
@@ -140,4 +146,44 @@ export function generateAdvancedMealPlan(profile) {
     }
   }
   return bestPlan;
+}
+
+// --- MODIFICARE 3: Adăugăm noua funcție de exportat ---
+export function regenerateSingleMeal(profile, mealType) {
+  const { targetCalories, targetProtein, targetCarbs, targetFats } = profile;
+
+  if (
+    !targetCalories ||
+    !mealTemplates[mealType] ||
+    mealTemplates[mealType].length === 0
+  ) {
+    console.error(
+      `Cannot regenerate meal: No templates found for type "${mealType}"`
+    );
+    return null;
+  }
+
+  const mealDistribution = { breakfast: 0.3, lunch: 0.4, dinner: 0.3 };
+  const distributionRatio = mealDistribution[mealType] || 0.33;
+
+  const mealTargets = {
+    p: targetProtein * distributionRatio,
+    c: targetCarbs * distributionRatio,
+    f: targetFats * distributionRatio,
+  };
+
+  const mealTemplate =
+    mealTemplates[mealType][
+      Math.floor(Math.random() * mealTemplates[mealType].length)
+    ];
+
+  // Apelăm funcția existentă, dar acum îi pasăm și tipul mesei
+  const newMeal = generateSingleMealCascade(
+    mealTemplate,
+    targetCalories * distributionRatio,
+    mealTargets,
+    mealType
+  );
+
+  return newMeal;
 }

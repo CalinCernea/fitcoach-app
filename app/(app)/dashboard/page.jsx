@@ -5,7 +5,10 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/utils/supabase";
-import { generateAdvancedMealPlan } from "@/utils/advancedMealPlanner";
+import {
+  generateAdvancedMealPlan,
+  regenerateSingleMeal,
+} from "@/utils/advancedMealPlanner";
 
 // UI Components
 import { Button } from "@/components/ui/button";
@@ -75,12 +78,12 @@ export default function DashboardPage() {
     setProfile(userProfile);
 
     await ensureMealPlansExist(user.id, userProfile);
-    await loadPlanForDate(user.id, getFormattedDate(currentDate));
+    await loadPlanForDate(user.id, getFormattedDate(currentDate), userProfile);
 
     setLoading(false);
   }, [router, currentDate]);
 
-  const loadPlanForDate = async (userId, dateString) => {
+  const loadPlanForDate = async (userId, dateString, userProfile) => {
     setLoading(true);
     const { data, error } = await supabase
       .from("daily_meal_plans")
@@ -89,11 +92,10 @@ export default function DashboardPage() {
       .eq("plan_date", dateString)
       .single();
 
-    if (data) {
+    if (data && data.plan_data) {
       setCurrentPlan(data.plan_data);
     } else {
-      // Dacă, din orice motiv, planul nu există, îl generăm pe loc
-      const newPlan = generateAdvancedMealPlan(profile);
+      const newPlan = generateAdvancedMealPlan(userProfile);
       await savePlan(userId, dateString, newPlan);
       setCurrentPlan(newPlan);
     }
@@ -133,9 +135,10 @@ export default function DashboardPage() {
   const savePlan = async (userId, dateString, plan) => {
     await supabase
       .from("daily_meal_plans")
-      .update({ plan_data: plan })
-      .eq("user_id", userId)
-      .eq("plan_date", dateString);
+      .upsert(
+        { user_id: userId, plan_date: dateString, plan_data: plan },
+        { onConflict: "user_id, plan_date" }
+      );
   };
 
   const handleRegenerate = async () => {
@@ -148,6 +151,49 @@ export default function DashboardPage() {
     setLoading(false);
   };
 
+  // --- AICI ESTE FUNCȚIA MODIFICATĂ ---
+  const handleRegenerateSingleMeal = async (mealIndex) => {
+    if (!profile || !currentPlan) return;
+
+    const mealType = ["breakfast", "lunch", "dinner"][mealIndex];
+
+    // Extrage țintele mesei vechi, pe care o vom înlocui
+    const oldMeal = currentPlan.plan[mealIndex];
+    const oldMealTargets = {
+      calories: oldMeal.total_calories,
+      protein: oldMeal.total_protein,
+      carbs: oldMeal.total_carbs,
+      fats: oldMeal.total_fats,
+    };
+
+    // Pasează aceste ținte funcției de regenerare
+    const newMeal = regenerateSingleMeal(profile, mealType, oldMealTargets);
+
+    if (!newMeal) {
+      console.error("Failed to generate a new meal.");
+      return;
+    }
+
+    const updatedPlan = { ...currentPlan };
+    updatedPlan.plan[mealIndex] = newMeal;
+
+    updatedPlan.totals = updatedPlan.plan.reduce(
+      (acc, meal) => {
+        acc.calories += meal.total_calories;
+        acc.protein += meal.total_protein;
+        acc.carbs += meal.total_carbs;
+        acc.fats += meal.total_fats;
+        return acc;
+      },
+      { calories: 0, protein: 0, carbs: 0, fats: 0 }
+    );
+
+    setCurrentPlan(updatedPlan);
+
+    const dateString = getFormattedDate(currentDate);
+    await savePlan(profile.id, dateString, updatedPlan);
+  };
+
   const changeDay = (offset) => {
     const newDate = new Date(currentDate);
     newDate.setDate(newDate.getDate() + offset);
@@ -156,7 +202,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchProfileAndInitialPlan();
-  }, [currentDate]); // Re-fetch when date changes
+  }, [currentDate, fetchProfileAndInitialPlan]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -176,8 +222,6 @@ export default function DashboardPage() {
           <p className="text-slate-500">Your meal plan dashboard.</p>
         </div>
         <div className="flex items-center gap-2">
-          {" "}
-          {/* <-- Wrapper nou */}
           <Button variant="outline" size="icon" asChild>
             <Link href="/profile">
               <User className="h-4 w-4" />
@@ -190,7 +234,6 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* --- Date Navigator --- */}
       <div className="flex justify-between items-center p-4 mb-6 bg-slate-100 dark:bg-slate-800 rounded-lg">
         <Button variant="outline" onClick={() => changeDay(-1)}>
           <ChevronLeft className="h-4 w-4 mr-2" /> Previous Day
@@ -223,33 +266,37 @@ export default function DashboardPage() {
               <div className="p-4 bg-slate-100 dark:bg-slate-800/50 rounded-lg">
                 <Label className="text-sm">Target Calories</Label>
                 <p className="text-2xl font-bold text-blue-500">
-                  {profile.targetCalories}
+                  {Math.round(profile.targetCalories || 0)}
                 </p>
                 <p className="text-xs text-slate-400">
-                  Plan: {currentPlan.totals.calories}
+                  Plan: {Math.round(currentPlan.totals.calories || 0)}
                 </p>
               </div>
               <div className="p-4 bg-slate-100 dark:bg-slate-800/50 rounded-lg">
                 <Label className="text-sm">Protein</Label>
                 <p className="text-xl font-semibold">
-                  {profile.targetProtein}g
+                  {Math.round(profile.targetProtein || 0)}g
                 </p>
                 <p className="text-xs text-slate-400">
-                  Plan: {currentPlan.totals.protein}g
+                  Plan: {Math.round(currentPlan.totals.protein || 0)}g
                 </p>
               </div>
               <div className="p-4 bg-slate-100 dark:bg-slate-800/50 rounded-lg">
                 <Label className="text-sm">Carbs</Label>
-                <p className="text-xl font-semibold">{profile.targetCarbs}g</p>
+                <p className="text-xl font-semibold">
+                  {Math.round(profile.targetCarbs || 0)}g
+                </p>
                 <p className="text-xs text-slate-400">
-                  Plan: {currentPlan.totals.carbs}g
+                  Plan: {Math.round(currentPlan.totals.carbs || 0)}g
                 </p>
               </div>
               <div className="p-4 bg-slate-100 dark:bg-slate-800/50 rounded-lg">
                 <Label className="text-sm">Fats</Label>
-                <p className="text-xl font-semibold">{profile.targetFats}g</p>
+                <p className="text-xl font-semibold">
+                  {Math.round(profile.targetFats || 0)}g
+                </p>
                 <p className="text-xs text-slate-400">
-                  Plan: {currentPlan.totals.fats}g
+                  Plan: {Math.round(currentPlan.totals.fats || 0)}g
                 </p>
               </div>
             </CardContent>
@@ -264,7 +311,10 @@ export default function DashboardPage() {
 
           <Accordion type="single" collapsible className="w-full">
             {currentPlan.plan.map((meal, index) => (
-              <AccordionItem value={`item-${index}`} key={index}>
+              <AccordionItem
+                value={`item-${index}`}
+                key={`${currentDate.toISOString()}-${index}`}
+              >
                 <AccordionTrigger className="text-lg font-medium">
                   <div className="flex justify-between w-full pr-4">
                     <div className="flex items-center gap-4">
@@ -294,6 +344,16 @@ export default function DashboardPage() {
                       </li>
                     ))}
                   </ul>
+                  <div className="px-4 pb-2 flex justify-end">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRegenerateSingleMeal(index)}
+                    >
+                      <RefreshCw className="mr-2 h-3 w-3" />
+                      Regenerate this meal
+                    </Button>
+                  </div>
                 </AccordionContent>
               </AccordionItem>
             ))}
