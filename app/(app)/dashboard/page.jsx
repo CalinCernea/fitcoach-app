@@ -27,6 +27,14 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import {
   LogOut,
   RefreshCw,
   UtensilsCrossed,
@@ -34,10 +42,40 @@ import {
   ChevronLeft,
   ChevronRight,
   User,
+  Beef,
+  Wheat,
+  Droplets,
+  ShoppingCart,
 } from "lucide-react";
 
 // --- Helper Functions ---
 const getFormattedDate = (date) => date.toISOString().split("T")[0];
+
+const generateShoppingList = (dailyPlans) => {
+  const aggregatedIngredients = {};
+
+  if (!dailyPlans || dailyPlans.length === 0) {
+    return {};
+  }
+
+  dailyPlans.forEach(planWrapper => {
+    const planData = planWrapper.plan_data;
+    if (planData && planData.plan) {
+      planData.plan.forEach(meal => {
+        meal.ingredients.forEach(ingredient => {
+          if (aggregatedIngredients[ingredient.name]) {
+            aggregatedIngredients[ingredient.name] += ingredient.amount;
+          } else {
+            aggregatedIngredients[ingredient.name] = ingredient.amount;
+          }
+        });
+      });
+    }
+  });
+
+  return aggregatedIngredients;
+};
+
 
 const LoadingSpinner = () => (
   <div className="flex items-center justify-center h-screen">
@@ -54,11 +92,45 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const [shoppingList, setShoppingList] = useState({});
+  // --- AICI ESTE MODIFICAREA ---
+  const [shoppingListPeriod, setShoppingListPeriod] = useState(7); // Perioada implicită: 7 zile
+
+  const fetchWeeklyPlans = useCallback(async (userId) => {
+    const today = new Date();
+    const datesToFetch = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(today);
+      d.setDate(d.getDate() + i);
+      return getFormattedDate(d);
+    });
+
+    const { data, error } = await supabase
+      .from("daily_meal_plans")
+      .select("plan_data")
+      .eq("user_id", userId)
+      .in("plan_date", datesToFetch);
+
+    if (error) {
+      console.error("Error fetching weekly plans for shopping list:", error);
+      return [];
+    }
+    return data;
+  }, []);
+
+  useEffect(() => {
+    if (profile) {
+      fetchWeeklyPlans(profile.id).then(weeklyPlans => {
+        const plansForPeriod = weeklyPlans.slice(0, shoppingListPeriod);
+        const newList = generateShoppingList(plansForPeriod);
+        setShoppingList(newList);
+      });
+    }
+  }, [profile, shoppingListPeriod, currentPlan, fetchWeeklyPlans]);
+
+
   const fetchProfileAndInitialPlan = useCallback(async () => {
     setLoading(true);
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       router.push("/login");
       return;
@@ -151,13 +223,9 @@ export default function DashboardPage() {
     setLoading(false);
   };
 
-  // --- AICI ESTE FUNCȚIA MODIFICATĂ ---
   const handleRegenerateSingleMeal = async (mealIndex) => {
     if (!profile || !currentPlan) return;
-
     const mealType = ["breakfast", "lunch", "dinner"][mealIndex];
-
-    // Extrage țintele mesei vechi, pe care o vom înlocui
     const oldMeal = currentPlan.plan[mealIndex];
     const oldMealTargets = {
       calories: oldMeal.total_calories,
@@ -165,18 +233,13 @@ export default function DashboardPage() {
       carbs: oldMeal.total_carbs,
       fats: oldMeal.total_fats,
     };
-
-    // Pasează aceste ținte funcției de regenerare
     const newMeal = regenerateSingleMeal(profile, mealType, oldMealTargets);
-
     if (!newMeal) {
       console.error("Failed to generate a new meal.");
       return;
     }
-
     const updatedPlan = { ...currentPlan };
     updatedPlan.plan[mealIndex] = newMeal;
-
     updatedPlan.totals = updatedPlan.plan.reduce(
       (acc, meal) => {
         acc.calories += meal.total_calories;
@@ -187,9 +250,7 @@ export default function DashboardPage() {
       },
       { calories: 0, protein: 0, carbs: 0, fats: 0 }
     );
-
     setCurrentPlan(updatedPlan);
-
     const dateString = getFormattedDate(currentDate);
     await savePlan(profile.id, dateString, updatedPlan);
   };
@@ -222,6 +283,47 @@ export default function DashboardPage() {
           <p className="text-slate-500">Your meal plan dashboard.</p>
         </div>
         <div className="flex items-center gap-2">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="outline">
+                <ShoppingCart className="mr-2 h-4 w-4" />
+                Shopping List
+              </Button>
+            </SheetTrigger>
+            <SheetContent>
+              <SheetHeader>
+                <SheetTitle>Your Shopping List</SheetTitle>
+                <SheetDescription>
+                  Aggregated ingredients for the selected period.
+                </SheetDescription>
+              </SheetHeader>
+              <div className="py-4">
+                <div className="flex justify-center gap-2 mb-4">
+                  <Button
+                    variant={shoppingListPeriod === 3 ? "default" : "outline"}
+                    onClick={() => setShoppingListPeriod(3)}
+                  >
+                    Next 3 Days
+                  </Button>
+                  <Button
+                    variant={shoppingListPeriod === 7 ? "default" : "outline"}
+                    onClick={() => setShoppingListPeriod(7)}
+                  >
+                    Next 7 Days
+                  </Button>
+                </div>
+                <ul className="space-y-2">
+                  {Object.entries(shoppingList).map(([name, amount]) => (
+                    <li key={name} className="flex justify-between items-center p-2 rounded-md bg-slate-100 dark:bg-slate-800">
+                      <span className="font-medium">{name}</span>
+                      <span className="font-mono text-slate-500">{Math.round(amount)}g</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </SheetContent>
+          </Sheet>
+
           <Button variant="outline" size="icon" asChild>
             <Link href="/profile">
               <User className="h-4 w-4" />
@@ -327,6 +429,32 @@ export default function DashboardPage() {
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
+                  <div className="px-4 pt-2 pb-4 border-b border-slate-200 dark:border-slate-700">
+                    <div className="grid grid-cols-3 gap-4 text-center">
+                      <div className="flex flex-col items-center">
+                        <span className="text-xs text-slate-500">Protein</span>
+                        <div className="flex items-center gap-1 font-semibold">
+                          <Beef className="h-4 w-4 text-red-500" />
+                          {Math.round(meal.total_protein)}g
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <span className="text-xs text-slate-500">Carbs</span>
+                        <div className="flex items-center gap-1 font-semibold">
+                          <Wheat className="h-4 w-4 text-yellow-500" />
+                          {Math.round(meal.total_carbs)}g
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <span className="text-xs text-slate-500">Fats</span>
+                        <div className="flex items-center gap-1 font-semibold">
+                          <Droplets className="h-4 w-4 text-blue-500" />
+                          {Math.round(meal.total_fats)}g
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <ul className="space-y-2 p-4">
                     {meal.ingredients.map((ing, i) => (
                       <li
