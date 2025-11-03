@@ -51,18 +51,27 @@ import {
 // --- Helper Functions ---
 const getFormattedDate = (date) => date.toISOString().split("T")[0];
 
+const getStartOfWeek = (date) => {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(d.setDate(diff));
+};
+
+const addDays = (date, days) => {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+};
+
 const generateShoppingList = (dailyPlans) => {
   const aggregatedIngredients = {};
-
-  if (!dailyPlans || dailyPlans.length === 0) {
-    return {};
-  }
-
-  dailyPlans.forEach(planWrapper => {
+  if (!dailyPlans || dailyPlans.length === 0) return {};
+  dailyPlans.forEach((planWrapper) => {
     const planData = planWrapper.plan_data;
     if (planData && planData.plan) {
-      planData.plan.forEach(meal => {
-        meal.ingredients.forEach(ingredient => {
+      planData.plan.forEach((meal) => {
+        meal.ingredients.forEach((ingredient) => {
           if (aggregatedIngredients[ingredient.name]) {
             aggregatedIngredients[ingredient.name] += ingredient.amount;
           } else {
@@ -72,10 +81,8 @@ const generateShoppingList = (dailyPlans) => {
       });
     }
   });
-
   return aggregatedIngredients;
 };
-
 
 const LoadingSpinner = () => (
   <div className="flex items-center justify-center h-screen">
@@ -92,45 +99,38 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [shoppingList, setShoppingList] = useState({});
-  // --- AICI ESTE MODIFICAREA ---
-  const [shoppingListPeriod, setShoppingListPeriod] = useState(7); // Perioada implicită: 7 zile
+  const [startOfWeek, setStartOfWeek] = useState(getStartOfWeek(new Date()));
+  const [weeklyPlans, setWeeklyPlans] = useState(new Map());
 
-  const fetchWeeklyPlans = useCallback(async (userId) => {
-    const today = new Date();
-    const datesToFetch = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(today);
-      d.setDate(d.getDate() + i);
-      return getFormattedDate(d);
-    });
+  const [shoppingList, setShoppingList] = useState({});
+  const [shoppingListPeriod, setShoppingListPeriod] = useState(7);
+
+  const fetchPlansForWeek = useCallback(async (userId, weekStartDate) => {
+    const datesToFetch = Array.from({ length: 7 }, (_, i) =>
+      getFormattedDate(addDays(weekStartDate, i))
+    );
 
     const { data, error } = await supabase
       .from("daily_meal_plans")
-      .select("plan_data")
+      .select("plan_date, plan_data")
       .eq("user_id", userId)
       .in("plan_date", datesToFetch);
 
     if (error) {
-      console.error("Error fetching weekly plans for shopping list:", error);
-      return [];
+      console.error("Error fetching weekly plans:", error);
+      return new Map();
     }
-    return data;
+
+    const plansMap = new Map(data.map((p) => [p.plan_date, p.plan_data]));
+    setWeeklyPlans(plansMap);
+    return plansMap;
   }, []);
 
-  useEffect(() => {
-    if (profile) {
-      fetchWeeklyPlans(profile.id).then(weeklyPlans => {
-        const plansForPeriod = weeklyPlans.slice(0, shoppingListPeriod);
-        const newList = generateShoppingList(plansForPeriod);
-        setShoppingList(newList);
-      });
-    }
-  }, [profile, shoppingListPeriod, currentPlan, fetchWeeklyPlans]);
-
-
-  const fetchProfileAndInitialPlan = useCallback(async () => {
+  const fetchProfileAndPlans = useCallback(async () => {
     setLoading(true);
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     if (!session) {
       router.push("/login");
       return;
@@ -150,37 +150,47 @@ export default function DashboardPage() {
     setProfile(userProfile);
 
     await ensureMealPlansExist(user.id, userProfile);
-    await loadPlanForDate(user.id, getFormattedDate(currentDate), userProfile);
+    const plansMap = await fetchPlansForWeek(user.id, startOfWeek);
 
-    setLoading(false);
-  }, [router, currentDate]);
-
-  const loadPlanForDate = async (userId, dateString, userProfile) => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("daily_meal_plans")
-      .select("plan_data")
-      .eq("user_id", userId)
-      .eq("plan_date", dateString)
-      .single();
-
-    if (data && data.plan_data) {
-      setCurrentPlan(data.plan_data);
+    const todayString = getFormattedDate(currentDate);
+    if (plansMap.has(todayString)) {
+      setCurrentPlan(plansMap.get(todayString));
     } else {
-      const newPlan = generateAdvancedMealPlan(userProfile);
-      await savePlan(userId, dateString, newPlan);
-      setCurrentPlan(newPlan);
+      // Dacă planul pentru ziua curentă nu e în hartă, îl încărcăm separat
+      const { data, error } = await supabase
+        .from("daily_meal_plans")
+        .select("plan_data")
+        .eq("user_id", user.id)
+        .eq("plan_date", todayString)
+        .single();
+      if (data) setCurrentPlan(data.plan_data);
     }
+
     setLoading(false);
-  };
+  }, [router, currentDate, startOfWeek, fetchPlansForWeek]);
+
+  useEffect(() => {
+    fetchProfileAndPlans();
+  }, [fetchProfileAndPlans]);
+
+  useEffect(() => {
+    if (weeklyPlans.size > 0) {
+      const plansForPeriod = Array.from(weeklyPlans.values()).slice(
+        0,
+        shoppingListPeriod
+      );
+      const newList = generateShoppingList(
+        plansForPeriod.map((p) => ({ plan_data: p }))
+      );
+      setShoppingList(newList);
+    }
+  }, [weeklyPlans, shoppingListPeriod]);
 
   const ensureMealPlansExist = async (userId, userProfile) => {
-    const today = new Date();
-    const datesToCheck = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(today);
-      d.setDate(d.getDate() + i);
-      return getFormattedDate(d);
-    });
+    const datesToCheck = [];
+    for (let i = 0; i < 14; i++) {
+      datesToCheck.push(getFormattedDate(addDays(new Date(), i)));
+    }
 
     const { data: existingPlans, error } = await supabase
       .from("daily_meal_plans")
@@ -192,8 +202,8 @@ export default function DashboardPage() {
       return;
     }
 
-    const existingDates = existingPlans.map((p) => p.plan_date);
-    const missingDates = datesToCheck.filter((d) => !existingDates.includes(d));
+    const existingDates = new Set(existingPlans.map((p) => p.plan_date));
+    const missingDates = datesToCheck.filter((d) => !existingDates.has(d));
 
     if (missingDates.length > 0) {
       const plansToInsert = missingDates.map((date) => {
@@ -220,6 +230,7 @@ export default function DashboardPage() {
     const dateString = getFormattedDate(currentDate);
     await savePlan(profile.id, dateString, newPlan);
     setCurrentPlan(newPlan);
+    setWeeklyPlans((prev) => new Map(prev).set(dateString, newPlan));
     setLoading(false);
   };
 
@@ -253,24 +264,34 @@ export default function DashboardPage() {
     setCurrentPlan(updatedPlan);
     const dateString = getFormattedDate(currentDate);
     await savePlan(profile.id, dateString, updatedPlan);
+    setWeeklyPlans((prev) => new Map(prev).set(dateString, updatedPlan));
   };
 
-  const changeDay = (offset) => {
-    const newDate = new Date(currentDate);
-    newDate.setDate(newDate.getDate() + offset);
-    setCurrentDate(newDate);
+  const changeWeek = (offset) => {
+    const newStartOfWeek = addDays(startOfWeek, offset * 7);
+    setStartOfWeek(newStartOfWeek);
+    // Actualizăm și ziua curentă pentru a fi prima zi a noii săptămâni
+    handleDaySelect(newStartOfWeek);
   };
 
-  useEffect(() => {
-    fetchProfileAndInitialPlan();
-  }, [currentDate, fetchProfileAndInitialPlan]);
+  const handleDaySelect = (date) => {
+    setCurrentDate(date);
+    const dateString = getFormattedDate(date);
+    if (weeklyPlans.has(dateString)) {
+      setCurrentPlan(weeklyPlans.get(dateString));
+    } else {
+      // Dacă planul nu e încărcat, arătăm un loader temporar
+      setCurrentPlan(null);
+      // Logica de fetch va re-rula și va încărca planul corect
+    }
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push("/");
   };
 
-  if (!profile || !currentPlan) return <LoadingSpinner />;
+  if (!profile) return <LoadingSpinner />;
   if (error) return <div className="text-red-500 text-center">{error}</div>;
 
   return (
@@ -314,16 +335,20 @@ export default function DashboardPage() {
                 </div>
                 <ul className="space-y-2">
                   {Object.entries(shoppingList).map(([name, amount]) => (
-                    <li key={name} className="flex justify-between items-center p-2 rounded-md bg-slate-100 dark:bg-slate-800">
+                    <li
+                      key={name}
+                      className="flex justify-between items-center p-2 rounded-md bg-slate-100 dark:bg-slate-800"
+                    >
                       <span className="font-medium">{name}</span>
-                      <span className="font-mono text-slate-500">{Math.round(amount)}g</span>
+                      <span className="font-mono text-slate-500">
+                        {Math.round(amount)}g
+                      </span>
                     </li>
                   ))}
                 </ul>
               </div>
             </SheetContent>
           </Sheet>
-
           <Button variant="outline" size="icon" asChild>
             <Link href="/profile">
               <User className="h-4 w-4" />
@@ -336,25 +361,83 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <div className="flex justify-between items-center p-4 mb-6 bg-slate-100 dark:bg-slate-800 rounded-lg">
-        <Button variant="outline" onClick={() => changeDay(-1)}>
-          <ChevronLeft className="h-4 w-4 mr-2" /> Previous Day
-        </Button>
-        <h2 className="text-xl font-semibold">
-          {currentDate.toLocaleDateString("en-US", {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          })}
-        </h2>
-        <Button variant="outline" onClick={() => changeDay(1)}>
-          Next Day <ChevronRight className="h-4 w-4 ml-2" />
-        </Button>
-      </div>
+      <Card className="w-full mb-8">
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <CardTitle>Weekly Overview</CardTitle>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => changeWeek(-1)}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => changeWeek(1)}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="grid grid-cols-2 md:grid-cols-7 gap-2">
+          {Array.from({ length: 7 }).map((_, i) => {
+            const dayDate = addDays(startOfWeek, i);
+            const dayString = getFormattedDate(dayDate);
+            const plan = weeklyPlans.get(dayString);
+            const isSelected = getFormattedDate(currentDate) === dayString;
 
-      {loading ? (
-        <div className="text-center p-8">Loading plan...</div>
+            return (
+              <button
+                key={dayString}
+                onClick={() => handleDaySelect(dayDate)}
+                className={`p-2 rounded-lg text-left border-2 transition-colors ${
+                  isSelected
+                    ? "border-blue-500 bg-blue-50 dark:bg-blue-900/50"
+                    : "border-transparent hover:bg-slate-100 dark:hover:bg-slate-800"
+                }`}
+              >
+                <p className="font-bold text-sm">
+                  {dayDate.toLocaleDateString("en-US", { weekday: "short" })}
+                </p>
+                <p className="text-xs text-slate-500 mb-2">
+                  {dayDate.toLocaleDateString("en-US", {
+                    day: "2-digit",
+                    month: "2-digit",
+                  })}
+                </p>
+                {plan ? (
+                  <div className="text-xs">
+                    <p className="font-semibold">
+                      {Math.round(plan.totals.calories)} kcal
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400">No plan</p>
+                )}
+              </button>
+            );
+          })}
+        </CardContent>
+      </Card>
+
+      <h2 className="text-2xl font-bold mb-4">
+        Details for:{" "}
+        {currentDate.toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        })}
+      </h2>
+
+      {!currentPlan ? (
+        <div className="text-center p-8">
+          Loading plan for the selected day...
+        </div>
       ) : (
         <>
           <Card className="w-full mb-8">
@@ -411,7 +494,12 @@ export default function DashboardPage() {
             </Button>
           </div>
 
-          <Accordion type="single" collapsible className="w-full">
+          <Accordion
+            type="single"
+            collapsible
+            className="w-full"
+            defaultValue="item-0"
+          >
             {currentPlan.plan.map((meal, index) => (
               <AccordionItem
                 value={`item-${index}`}
@@ -454,7 +542,6 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   </div>
-
                   <ul className="space-y-2 p-4">
                     {meal.ingredients.map((ing, i) => (
                       <li
