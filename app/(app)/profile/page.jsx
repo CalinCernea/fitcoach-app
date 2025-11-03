@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/utils/supabase";
 import { calculateAdvancedMetrics } from "@/utils/calorieCalculator";
+import { foodComponents } from "@/utils/foodComponentDatabase"; // --- NOU: Importăm ingredientele
 
 // UI Components
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { ArrowLeft, Save, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { MultiSelect } from "@/components/ui/multi-select"; // --- NOU: Importăm componenta MultiSelect
 
 // --- NOU: Importăm componentele pentru grafic ---
 import {
@@ -40,6 +42,12 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+
+// --- NOU: Pregătim opțiunile pentru MultiSelect ---
+const foodOptions = Object.entries(foodComponents).map(([key, value]) => ({
+  value: key,
+  label: value.name,
+}));
 
 // --- Componenta de Loading ---
 const LoadingSpinner = () => (
@@ -55,11 +63,11 @@ export default function ProfilePage() {
   const [profileData, setProfileData] = useState(null);
   const [error, setError] = useState("");
 
-  // --- NOU: Stări pentru jurnalul de greutate ---
+  // --- Stări pentru jurnalul de greutate ---
   const [weightLog, setWeightLog] = useState([]);
   const [loadingLog, setLoadingLog] = useState(true);
 
-  // --- NOU: Funcție pentru a prelua jurnalul de greutate ---
+  // --- Funcție pentru a prelua jurnalul de greutate ---
   const fetchWeightLog = useCallback(async (userId) => {
     setLoadingLog(true);
     const { data, error } = await supabase
@@ -104,8 +112,12 @@ export default function ProfilePage() {
       setError("Could not fetch your profile. Please try again.");
       console.error("Profile fetch error:", error);
     } else {
-      setProfileData(data);
-      // --- NOU: Apelăm și funcția de preluare a jurnalului ---
+      // --- MODIFICAT: Asigurăm că listele de preferințe nu sunt null la încărcare ---
+      setProfileData({
+        ...data,
+        liked_foods: data.liked_foods || [],
+        disliked_foods: data.disliked_foods || [],
+      });
       fetchWeightLog(session.user.id);
     }
     setLoading(false);
@@ -119,7 +131,6 @@ export default function ProfilePage() {
     setProfileData((prev) => ({ ...prev, [field]: value }));
   };
 
-  // --- MODIFICAT: Funcția de submit a formularului ---
   const handleFormSubmit = async (e) => {
     e.preventDefault();
     setIsSaving(true);
@@ -132,7 +143,14 @@ export default function ProfilePage() {
     };
 
     const newMetrics = calculateAdvancedMetrics(cleanData);
-    const updatePayload = { ...cleanData, ...newMetrics };
+
+    // --- MODIFICAT: Includem și listele de preferințe în payload-ul de update ---
+    const updatePayload = {
+      ...cleanData,
+      ...newMetrics,
+      liked_foods: profileData.liked_foods,
+      disliked_foods: profileData.disliked_foods,
+    };
 
     // 1. Actualizăm profilul principal
     const { error: profileError } = await supabase
@@ -144,11 +162,10 @@ export default function ProfilePage() {
       setIsSaving(false);
       toast.error(`Failed to update profile: ${profileError.message}`);
       console.error("Profile update error:", profileError);
-      return; // Oprim execuția dacă profilul nu s-a putut salva
+      return;
     }
 
-    // 2. --- NOU: Adăugăm intrarea în jurnalul de greutate ---
-    // Acest pas se execută doar dacă salvarea profilului a avut succes
+    // 2. Adăugăm intrarea în jurnalul de greutate
     const { error: logError } = await supabase
       .from("weight_log")
       .insert({ user_id: profileData.id, weight: cleanData.weight });
@@ -156,12 +173,10 @@ export default function ProfilePage() {
     setIsSaving(false);
 
     if (logError) {
-      // Nu este o eroare critică, doar avertizăm
       toast.warning("Profile saved, but could not log weight entry.");
       console.warn("Weight log insert error:", logError);
     } else {
-      toast.success("Profile updated and weight logged!");
-      // Re-preluăm datele pentru a actualiza totul, inclusiv graficul
+      toast.success("Profile updated and preferences saved!");
       fetchProfile();
     }
   };
@@ -198,12 +213,11 @@ export default function ProfilePage() {
             </Button>
           </div>
           <CardDescription>
-            Update your personal information and goals.
+            Update your personal information, goals, and food preferences.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleFormSubmit} className="space-y-6">
-            {/* ... Formularul tău existent ... */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Full Name</Label>
@@ -285,6 +299,37 @@ export default function ProfilePage() {
               </div>
             </div>
 
+            {/* --- NOU: Secțiunea pentru Preferințe Alimentare --- */}
+            <div className="space-y-4 pt-4 border-t">
+              <h3 className="text-lg font-medium">Food Preferences</h3>
+              <div className="space-y-2">
+                <Label>Foods I Like</Label>
+                <MultiSelect
+                  options={foodOptions}
+                  selected={profileData.liked_foods}
+                  onChange={(selected) => handleChange("liked_foods", selected)}
+                  placeholder="Select your favorite foods..."
+                />
+                <p className="text-sm text-muted-foreground">
+                  We'll try to include these more often in your plan.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label>Foods I Dislike / Allergies</Label>
+                <MultiSelect
+                  options={foodOptions}
+                  selected={profileData.disliked_foods}
+                  onChange={(selected) =>
+                    handleChange("disliked_foods", selected)
+                  }
+                  placeholder="Select foods to avoid..."
+                />
+                <p className="text-sm text-muted-foreground">
+                  We will exclude these from your meal plan.
+                </p>
+              </div>
+            </div>
+
             <div className="flex justify-end pt-4">
               <Button type="submit" disabled={isSaving}>
                 {isSaving ? (
@@ -299,7 +344,6 @@ export default function ProfilePage() {
         </CardContent>
       </Card>
 
-      {/* --- NOU: Cardul pentru Progres --- */}
       <Card>
         <CardHeader>
           <CardTitle>My Progress</CardTitle>
