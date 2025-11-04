@@ -75,8 +75,9 @@ export function MultiSelect({
       </div>
       <div className="relative mt-2">
         {open && selectables.length > 0 ? (
-          <div className="absolute w-full z-10 top-0 rounded-md border bg-popover text-popover-foreground shadow-md outline-none animate-in">
-            <CommandGroup className="h-full overflow-auto">
+          <div className="absolute top-0 z-10 w-full rounded-md border bg-popover text-popover-foreground shadow-md outline-none animate-in">
+            {/* --- AICI ESTE MODIFICAREA --- */}
+            <CommandGroup className="h-full max-h-[200px] overflow-y-auto">
               {selectables.map((option) => {
                 return (
                   <CommandItem
