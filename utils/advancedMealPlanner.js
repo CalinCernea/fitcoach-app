@@ -77,22 +77,14 @@ function generateSingleMealCascade(
 /*                    🔥 Integrare preferințe alimentare                      */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Filtrare și prioritizare a șabloanelor mesei în funcție de preferințele utilizatorului
- */
-function filterMealTemplates(templates, liked_foods = [], disliked_foods = []) {
-  // Eliminăm complet șabloanele care conțin alimente neplăcute
-  const safe_liked = liked_foods || [];
-  const safe_disliked = disliked_foods || [];
-
+function filterMealTemplates(templates, liked_foods, disliked_foods) {
   const filtered = templates.filter((tpl) => {
     const comps = Object.values(tpl.components);
     return !comps.some((key) => disliked_foods.includes(key));
   });
 
-  if (filtered.length === 0) return templates; // fallback dacă au fost filtrate toate
+  if (filtered.length === 0) return templates;
 
-  // Prioritizăm cele care conțin ingrediente preferate
   const liked = filtered.filter((tpl) =>
     Object.values(tpl.components).some((key) => liked_foods.includes(key))
   );
@@ -101,7 +93,6 @@ function filterMealTemplates(templates, liked_foods = [], disliked_foods = []) {
       !Object.values(tpl.components).some((key) => liked_foods.includes(key))
   );
 
-  // Punem mai întâi șabloanele preferate (vor fi alese mai des)
   return [...liked, ...normal];
 }
 
@@ -109,14 +100,22 @@ function filterMealTemplates(templates, liked_foods = [], disliked_foods = []) {
 /*                      Generare plan avansat cu preferințe                  */
 /* -------------------------------------------------------------------------- */
 export function generateAdvancedMealPlan(profile) {
+  // 🔹 AICI ESTE PLASA DE SIGURANȚĂ 🔹
+  const safeProfile = {
+    ...profile,
+    liked_foods: profile.liked_foods || [],
+    disliked_foods: profile.disliked_foods || [],
+  };
+
   const {
     targetCalories,
     targetProtein,
     targetCarbs,
     targetFats,
-    liked_foods = [],
-    disliked_foods = [],
-  } = profile;
+    liked_foods,
+    disliked_foods,
+  } = safeProfile; // Folosim profilul sigur
+
   let bestPlan = null;
   let smallestDifference = Infinity;
 
@@ -139,7 +138,6 @@ export function generateAdvancedMealPlan(profile) {
       f: targetFats * mealDistribution.dinner,
     };
 
-    // 🔹 Folosim funcția de filtrare pentru a alege șabloane potrivite
     const breakfastTemplates = filterMealTemplates(
       mealTemplates.breakfast,
       liked_foods,
@@ -207,14 +205,21 @@ export function generateAdvancedMealPlan(profile) {
 /*             Regenerare individuală a unei mese cu preferințe              */
 /* -------------------------------------------------------------------------- */
 export function regenerateSingleMeal(profile, mealType) {
+  // 🔹 AICI ESTE PLASA DE SIGURANȚĂ 🔹
+  const safeProfile = {
+    ...profile,
+    liked_foods: profile.liked_foods || [],
+    disliked_foods: profile.disliked_foods || [],
+  };
+
   const {
     targetCalories,
     targetProtein,
     targetCarbs,
     targetFats,
-    liked_foods = [],
-    disliked_foods = [],
-  } = profile;
+    liked_foods,
+    disliked_foods,
+  } = safeProfile; // Folosim profilul sigur
 
   if (
     !targetCalories ||
@@ -222,7 +227,7 @@ export function regenerateSingleMeal(profile, mealType) {
     mealTemplates[mealType].length === 0
   ) {
     console.error(
-      "Cannot regenerate meal: No templates found for type " + mealType
+      "Cannot regenerate meal: No templates found for type " + mealType
     );
     return null;
   }
@@ -236,7 +241,6 @@ export function regenerateSingleMeal(profile, mealType) {
     f: targetFats * distributionRatio,
   };
 
-  // 🔹 Aplicăm filtrarea și prioritizarea în funcție de preferințe
   const filteredTemplates = filterMealTemplates(
     mealTemplates[mealType],
     liked_foods,
