@@ -82,6 +82,9 @@ function generateSingleMealCascade(
  */
 function filterMealTemplates(templates, liked_foods = [], disliked_foods = []) {
   // Eliminăm complet șabloanele care conțin alimente neplăcute
+  const safe_liked = liked_foods || [];
+  const safe_disliked = disliked_foods || [];
+
   const filtered = templates.filter((tpl) => {
     const comps = Object.values(tpl.components);
     return !comps.some((key) => disliked_foods.includes(key));
