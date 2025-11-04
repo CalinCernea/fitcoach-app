@@ -2,6 +2,9 @@
 import { foodComponents } from "./foodComponentDatabase";
 import { mealTemplates } from "./mealTemplates";
 
+/* -------------------------------------------------------------------------- */
+/*                            Funcții existente                               */
+/* -------------------------------------------------------------------------- */
 function addIngredientToMeal(meal, component, amountGrams) {
   if (!component || !amountGrams || amountGrams <= 5) return null;
   const ratio = amountGrams / 100;
@@ -70,6 +73,38 @@ function generateSingleMealCascade(
   return meal;
 }
 
+/* -------------------------------------------------------------------------- */
+/*                    🔥 Integrare preferințe alimentare                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Filtrare și prioritizare a șabloanelor mesei în funcție de preferințele utilizatorului
+ */
+function filterMealTemplates(templates, liked_foods = [], disliked_foods = []) {
+  // Eliminăm complet șabloanele care conțin alimente neplăcute
+  const filtered = templates.filter((tpl) => {
+    const comps = Object.values(tpl.components);
+    return !comps.some((key) => disliked_foods.includes(key));
+  });
+
+  if (filtered.length === 0) return templates; // fallback dacă au fost filtrate toate
+
+  // Prioritizăm cele care conțin ingrediente preferate
+  const liked = filtered.filter((tpl) =>
+    Object.values(tpl.components).some((key) => liked_foods.includes(key))
+  );
+  const normal = filtered.filter(
+    (tpl) =>
+      !Object.values(tpl.components).some((key) => liked_foods.includes(key))
+  );
+
+  // Punem mai întâi șabloanele preferate (vor fi alese mai des)
+  return [...liked, ...normal];
+}
+
+/* -------------------------------------------------------------------------- */
+/*                      Generare plan avansat cu preferințe                  */
+/* -------------------------------------------------------------------------- */
 export function generateAdvancedMealPlan(profile) {
   const {
     targetCalories,
@@ -79,57 +114,12 @@ export function generateAdvancedMealPlan(profile) {
     liked_foods = [],
     disliked_foods = [],
   } = profile;
-
   let bestPlan = null;
   let smallestDifference = Infinity;
 
-  const isTemplateAllowed = (template) => {
-    const components = Object.values(template.components);
-    return !components.some((componentKey) =>
-      disliked_foods.includes(componentKey)
-    );
-  };
-
-  let filteredBreakfastTemplates =
-    mealTemplates.breakfast.filter(isTemplateAllowed);
-  let filteredLunchTemplates = mealTemplates.lunch.filter(isTemplateAllowed);
-  let filteredDinnerTemplates = mealTemplates.dinner.filter(isTemplateAllowed);
-
-  const sortByLikes = (a, b) => {
-    const aLikes = Object.values(a.components).filter((c) =>
-      liked_foods.includes(c)
-    ).length;
-    const bLikes = Object.values(b.components).filter((c) =>
-      liked_foods.includes(c)
-    ).length;
-    return bLikes - aLikes;
-  };
-
-  filteredBreakfastTemplates.sort(sortByLikes);
-  filteredLunchTemplates.sort(sortByLikes);
-  filteredDinnerTemplates.sort(sortByLikes);
-
-  if (filteredBreakfastTemplates.length === 0) {
-    console.warn(
-      "No breakfast templates left after filtering. Using all templates."
-    );
-    filteredBreakfastTemplates = [...mealTemplates.breakfast];
-  }
-  if (filteredLunchTemplates.length === 0) {
-    console.warn(
-      "No lunch templates left after filtering. Using all templates."
-    );
-    filteredLunchTemplates = [...mealTemplates.lunch];
-  }
-  if (filteredDinnerTemplates.length === 0) {
-    console.warn(
-      "No dinner templates left after filtering. Using all templates."
-    );
-    filteredDinnerTemplates = [...mealTemplates.dinner];
-  }
-
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 10; i++) {
     const mealDistribution = { breakfast: 0.3, lunch: 0.4, dinner: 0.3 };
+
     const breakfastTargets = {
       p: targetProtein * mealDistribution.breakfast,
       c: targetCarbs * mealDistribution.breakfast,
@@ -146,14 +136,29 @@ export function generateAdvancedMealPlan(profile) {
       f: targetFats * mealDistribution.dinner,
     };
 
-    const selectTemplate = (templates) => {
-      const index = Math.floor(Math.pow(Math.random(), 2) * templates.length);
-      return templates[index];
-    };
+    // 🔹 Folosim funcția de filtrare pentru a alege șabloane potrivite
+    const breakfastTemplates = filterMealTemplates(
+      mealTemplates.breakfast,
+      liked_foods,
+      disliked_foods
+    );
+    const lunchTemplates = filterMealTemplates(
+      mealTemplates.lunch,
+      liked_foods,
+      disliked_foods
+    );
+    const dinnerTemplates = filterMealTemplates(
+      mealTemplates.dinner,
+      liked_foods,
+      disliked_foods
+    );
 
-    const breakfastTemplate = selectTemplate(filteredBreakfastTemplates);
-    const lunchTemplate = selectTemplate(filteredLunchTemplates);
-    const dinnerTemplate = selectTemplate(filteredDinnerTemplates);
+    const breakfastTemplate =
+      breakfastTemplates[Math.floor(Math.random() * breakfastTemplates.length)];
+    const lunchTemplate =
+      lunchTemplates[Math.floor(Math.random() * lunchTemplates.length)];
+    const dinnerTemplate =
+      dinnerTemplates[Math.floor(Math.random() * dinnerTemplates.length)];
 
     const breakfast = generateSingleMealCascade(
       breakfastTemplate,
@@ -195,7 +200,10 @@ export function generateAdvancedMealPlan(profile) {
   return bestPlan;
 }
 
-export function regenerateSingleMeal(profile, mealType, oldMealTargets) {
+/* -------------------------------------------------------------------------- */
+/*             Regenerare individuală a unei mese cu preferințe              */
+/* -------------------------------------------------------------------------- */
+export function regenerateSingleMeal(profile, mealType) {
   const {
     targetCalories,
     targetProtein,
@@ -205,45 +213,38 @@ export function regenerateSingleMeal(profile, mealType, oldMealTargets) {
     disliked_foods = [],
   } = profile;
 
-  const isTemplateAllowed = (template) => {
-    const components = Object.values(template.components);
-    return !components.some((componentKey) =>
-      disliked_foods.includes(componentKey)
+  if (
+    !targetCalories ||
+    !mealTemplates[mealType] ||
+    mealTemplates[mealType].length === 0
+  ) {
+    console.error(
+      "Cannot regenerate meal: No templates found for type " + mealType
     );
-  };
-
-  let availableTemplates =
-    mealTemplates[mealType]?.filter(isTemplateAllowed) || [];
-
-  if (availableTemplates.length === 0) {
-    console.warn(
-      `No templates for ${mealType} after filtering. Using all templates.`
-    );
-    availableTemplates = [...mealTemplates[mealType]];
+    return null;
   }
 
-  const sortByLikes = (a, b) => {
-    const aLikes = Object.values(a.components).filter((c) =>
-      liked_foods.includes(c)
-    ).length;
-    const bLikes = Object.values(b.components).filter((c) =>
-      liked_foods.includes(c)
-    ).length;
-    return bLikes - aLikes;
-  };
-  availableTemplates.sort(sortByLikes);
-
-  const mealTemplate = availableTemplates[0]; // Alegem cel mai bun șablon
+  const mealDistribution = { breakfast: 0.3, lunch: 0.4, dinner: 0.3 };
+  const distributionRatio = mealDistribution[mealType] || 0.33;
 
   const mealTargets = {
-    p: oldMealTargets.protein,
-    c: oldMealTargets.carbs,
-    f: oldMealTargets.fats,
+    p: targetProtein * distributionRatio,
+    c: targetCarbs * distributionRatio,
+    f: targetFats * distributionRatio,
   };
+
+  // 🔹 Aplicăm filtrarea și prioritizarea în funcție de preferințe
+  const filteredTemplates = filterMealTemplates(
+    mealTemplates[mealType],
+    liked_foods,
+    disliked_foods
+  );
+  const mealTemplate =
+    filteredTemplates[Math.floor(Math.random() * filteredTemplates.length)];
 
   const newMeal = generateSingleMealCascade(
     mealTemplate,
-    oldMealTargets.calories,
+    targetCalories * distributionRatio,
     mealTargets,
     mealType
   );
