@@ -156,7 +156,6 @@ export default function DashboardPage() {
     if (plansMap.has(todayString)) {
       setCurrentPlan(plansMap.get(todayString));
     } else {
-      // Dacă planul pentru ziua curentă nu e în hartă, îl încărcăm separat
       const { data, error } = await supabase
         .from("daily_meal_plans")
         .select("plan_data")
@@ -249,8 +248,12 @@ export default function DashboardPage() {
       console.error("Failed to generate a new meal.");
       return;
     }
-    const updatedPlan = { ...currentPlan };
-    updatedPlan.plan[mealIndex] = newMeal;
+
+    const updatedMeals = [...currentPlan.plan];
+    updatedMeals[mealIndex] = newMeal;
+
+    const updatedPlan = { ...currentPlan, plan: updatedMeals };
+
     updatedPlan.totals = updatedPlan.plan.reduce(
       (acc, meal) => {
         acc.calories += meal.total_calories;
@@ -270,7 +273,6 @@ export default function DashboardPage() {
   const changeWeek = (offset) => {
     const newStartOfWeek = addDays(startOfWeek, offset * 7);
     setStartOfWeek(newStartOfWeek);
-    // Actualizăm și ziua curentă pentru a fi prima zi a noii săptămâni
     handleDaySelect(newStartOfWeek);
   };
 
@@ -280,9 +282,7 @@ export default function DashboardPage() {
     if (weeklyPlans.has(dateString)) {
       setCurrentPlan(weeklyPlans.get(dateString));
     } else {
-      // Dacă planul nu e încărcat, arătăm un loader temporar
       setCurrentPlan(null);
-      // Logica de fetch va re-rula și va încărca planul corect
     }
   };
 
@@ -311,7 +311,8 @@ export default function DashboardPage() {
                 Shopping List
               </Button>
             </SheetTrigger>
-            <SheetContent>
+            {/* --- AICI ESTE MODIFICAREA --- */}
+            <SheetContent className="flex flex-col">
               <SheetHeader>
                 <SheetTitle>Your Shopping List</SheetTitle>
                 <SheetDescription>
@@ -333,7 +334,10 @@ export default function DashboardPage() {
                     Next 7 Days
                   </Button>
                 </div>
-                <ul className="space-y-2">
+              </div>
+              {/* Container pentru listă cu scroll */}
+              <div className="flex-grow overflow-y-auto">
+                <ul className="space-y-2 pr-4">
                   {Object.entries(shoppingList).map(([name, amount]) => (
                     <li
                       key={name}
