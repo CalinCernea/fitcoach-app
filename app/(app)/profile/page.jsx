@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/utils/supabase";
 import { calculateAdvancedMetrics } from "@/utils/calorieCalculator";
-import { foodComponents } from "@/utils/foodComponentDatabase"; // --- NOU: Importăm ingredientele
+import { ingredients } from "@/utils/recipeDatabase"; // MODIFICAT: Importăm ingredientele din recipeDatabase
 
 // UI Components
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/select";
 import { ArrowLeft, Save, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { MultiSelect } from "@/components/ui/multi-select"; // --- NOU: Importăm componenta MultiSelect
+import { MultiSelect } from "@/components/ui/multi-select";
 
 // --- NOU: Importăm componentele pentru grafic ---
 import {
@@ -43,10 +43,10 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-// --- NOU: Pregătim opțiunile pentru MultiSelect ---
-const foodOptions = Object.entries(foodComponents).map(([key, value]) => ({
-  value: key,
-  label: value.name,
+// --- MODIFICAT: Pregătim opțiunile pentru MultiSelect din ingredientele rețetelor ---
+const foodOptions = Object.entries(ingredients).map(([key, value]) => ({
+  value: key, // ID-ul ingredientului (ex: "chicken_breast", "eggs")
+  label: value.name, // Numele afișat (ex: "Chicken Breast", "Eggs")
 }));
 
 // --- Componenta de Loading ---
@@ -112,7 +112,6 @@ export default function ProfilePage() {
       setError("Could not fetch your profile. Please try again.");
       console.error("Profile fetch error:", error);
     } else {
-      // --- MODIFICAT: Asigurăm că listele de preferințe nu sunt null la încărcare ---
       setProfileData({
         ...data,
         liked_foods: data.liked_foods || [],
@@ -144,7 +143,6 @@ export default function ProfilePage() {
 
     const newMetrics = calculateAdvancedMetrics(cleanData);
 
-    // --- MODIFICAT: Includem și listele de preferințe în payload-ul de update ---
     const updatePayload = {
       ...cleanData,
       ...newMetrics,
@@ -299,7 +297,7 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* --- NOU: Secțiunea pentru Preferințe Alimentare --- */}
+            {/* --- Secțiunea pentru Preferințe Alimentare --- */}
             <div className="space-y-4 pt-4 border-t">
               <h3 className="text-lg font-medium">Food Preferences</h3>
               <div className="space-y-2">
