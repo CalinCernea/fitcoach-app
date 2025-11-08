@@ -48,7 +48,8 @@ import {
   Droplets,
   ShoppingCart,
   BookOpen,
-  Replace, // --- NOU: Iconiță pentru Swap
+  Replace,
+  ChefHat, // --- NOU ---
 } from "lucide-react";
 // --- NOU: Importăm dialogul ---
 import { SwapMealDialog } from "@/components/SwapMealDialog";
@@ -337,6 +338,13 @@ export default function DashboardPage() {
           <p className="text-slate-500">Your meal plan dashboard.</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* --- NOU: Butonul Prep Mode --- */}
+          <Button variant="outline" asChild>
+            <Link href="/prep-mode">
+              <ChefHat className="mr-2 h-4 w-4" />
+              Prep Mode
+            </Link>
+          </Button>
           <Sheet>
             <SheetTrigger asChild>
               <Button variant="outline">

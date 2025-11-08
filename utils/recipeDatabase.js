@@ -1,60 +1,320 @@
 // utils/recipeDatabase.js
 
 export const ingredients = {
-  // Ingrediente existente
-  chicken_breast: { id: "chicken_breast", name: "Chicken Breast" },
-  quinoa: { id: "quinoa", name: "Quinoa" },
-  avocado: { id: "avocado", name: "Avocado" },
-  spinach: { id: "spinach", name: "Spinach" },
-  tomato: { id: "tomato", name: "Tomato" },
-  cucumber: { id: "cucumber", name: "Cucumber" },
-  feta_cheese: { id: "feta_cheese", name: "Feta Cheese" },
-  olive_oil: { id: "olive_oil", name: "Olive Oil" },
-  lemon: { id: "lemon", name: "Lemon" },
-  salmon_filet: { id: "salmon_filet", name: "Salmon Filet" },
-  asparagus: { id: "asparagus", name: "Asparagus" },
-  sweet_potato: { id: "sweet_potato", name: "Sweet Potato" },
-  greek_yogurt: { id: "greek_yogurt", name: "Greek Yogurt" },
-  berries: { id: "berries", name: "Mixed Berries" },
-  oats: { id: "oats", name: "Rolled Oats" },
-  protein_powder: { id: "protein_powder", name: "Protein Powder" },
-  almond_milk: { id: "almond_milk", name: "Almond Milk" },
-  eggs: { id: "eggs", name: "Eggs" },
-  whole_wheat_bread: { id: "whole_wheat_bread", name: "Whole Wheat Bread" },
-  turkey_breast: { id: "turkey_breast", name: "Turkey Breast" },
-  lettuce: { id: "lettuce", name: "Lettuce" },
-  beef_sirloin: { id: "beef_sirloin", name: "Beef Sirloin" },
-  broccoli: { id: "broccoli", name: "Broccoli" },
-  brown_rice: { id: "brown_rice", name: "Brown Rice" },
-  tzatziki: { id: "tzatziki", name: "Tzatziki Sauce" },
-
-  // --- NOI INGREDIENTE ---
-  banana: { id: "banana", name: "Banana" },
-  chia_seeds: { id: "chia_seeds", name: "Chia Seeds" },
-  honey: { id: "honey", name: "Honey" },
-  cottage_cheese: { id: "cottage_cheese", name: "Cottage Cheese" },
-  peach: { id: "peach", name: "Peach" },
-  almonds: { id: "almonds", name: "Almonds" },
-  tuna_can: { id: "tuna_can", name: "Canned Tuna" },
-  mayonnaise: { id: "mayonnaise", name: "Light Mayonnaise" },
-  onion: { id: "onion", name: "Red Onion" },
-  whole_wheat_wrap: { id: "whole_wheat_wrap", name: "Whole Wheat Wrap" },
-  lentils: { id: "lentils", name: "Lentils" },
-  carrot: { id: "carrot", name: "Carrot" },
-  celery: { id: "celery", name: "Celery" },
-  vegetable_broth: { id: "vegetable_broth", name: "Vegetable Broth" },
-  shrimp: { id: "shrimp", name: "Shrimp" },
-  garlic: { id: "garlic", name: "Garlic" },
-  bell_pepper: { id: "bell_pepper", name: "Bell Pepper" },
-  black_beans: { id: "black_beans", name: "Black Beans" },
-  corn: { id: "corn", name: "Corn" },
-  lime: { id: "lime", name: "Lime" },
-  cod_filet: { id: "cod_filet", name: "Cod Filet" },
-  pesto: { id: "pesto", name: "Pesto" },
-  cherry_tomatoes: { id: "cherry_tomatoes", name: "Cherry Tomatoes" },
+  // --- Existing Ingredients with Prep Info ---
+  chicken_breast: {
+    id: "chicken_breast",
+    name: "Chicken Breast",
+    prepInfo: {
+      canPrep: true,
+      method: "Grill or bake",
+      prepGroup: "Cooked Proteins",
+    },
+  },
+  quinoa: {
+    id: "quinoa",
+    name: "Quinoa",
+    prepInfo: {
+      canPrep: true,
+      method: "Boil according to instructions",
+      prepGroup: "Boiled Grains",
+    },
+  },
+  avocado: {
+    id: "avocado",
+    name: "Avocado",
+    prepInfo: { canPrep: false }, // Best fresh
+  },
+  spinach: {
+    id: "spinach",
+    name: "Spinach",
+    prepInfo: { canPrep: false }, // Best fresh
+  },
+  tomato: {
+    id: "tomato",
+    name: "Tomato",
+    prepInfo: {
+      canPrep: true,
+      method: "Chop or slice",
+      prepGroup: "Chopped Veggies",
+    },
+  },
+  cucumber: {
+    id: "cucumber",
+    name: "Cucumber",
+    prepInfo: { canPrep: true, method: "Slice", prepGroup: "Chopped Veggies" },
+  },
+  feta_cheese: {
+    id: "feta_cheese",
+    name: "Feta Cheese",
+    prepInfo: { canPrep: false }, // Best fresh
+  },
+  olive_oil: {
+    id: "olive_oil",
+    name: "Olive Oil",
+    prepInfo: { canPrep: false },
+  },
+  lemon: {
+    id: "lemon",
+    name: "Lemon",
+    prepInfo: { canPrep: false },
+  },
+  salmon_filet: {
+    id: "salmon_filet",
+    name: "Salmon Filet",
+    prepInfo: {
+      canPrep: true,
+      method: "Bake in the oven",
+      prepGroup: "Cooked Proteins",
+    },
+  },
+  asparagus: {
+    id: "asparagus",
+    name: "Asparagus",
+    prepInfo: {
+      canPrep: true,
+      method: "Roast or steam",
+      prepGroup: "Cooked Veggies",
+    },
+  },
+  sweet_potato: {
+    id: "sweet_potato",
+    name: "Sweet Potato",
+    prepInfo: {
+      canPrep: true,
+      method: "Cube and roast",
+      prepGroup: "Cooked Veggies",
+    },
+  },
+  greek_yogurt: {
+    id: "greek_yogurt",
+    name: "Greek Yogurt",
+    prepInfo: { canPrep: false },
+  },
+  berries: {
+    id: "berries",
+    name: "Mixed Berries",
+    prepInfo: { canPrep: false },
+  },
+  oats: {
+    id: "oats",
+    name: "Rolled Oats",
+    prepInfo: { canPrep: false }, // Used in overnight oats or cooked fresh
+  },
+  protein_powder: {
+    id: "protein_powder",
+    name: "Protein Powder",
+    prepInfo: { canPrep: false },
+  },
+  almond_milk: {
+    id: "almond_milk",
+    name: "Almond Milk",
+    prepInfo: { canPrep: false },
+  },
+  eggs: {
+    id: "eggs",
+    name: "Eggs",
+    prepInfo: { canPrep: true, method: "Hard boil", prepGroup: "Boiled Eggs" },
+  },
+  whole_wheat_bread: {
+    id: "whole_wheat_bread",
+    name: "Whole Wheat Bread",
+    prepInfo: { canPrep: false },
+  },
+  turkey_breast: {
+    id: "turkey_breast",
+    name: "Turkey Breast",
+    prepInfo: {
+      canPrep: true,
+      method: "Cook and slice",
+      prepGroup: "Cooked Proteins",
+    },
+  },
+  lettuce: {
+    id: "lettuce",
+    name: "Lettuce",
+    prepInfo: { canPrep: false }, // Best fresh
+  },
+  beef_sirloin: {
+    id: "beef_sirloin",
+    name: "Beef Sirloin",
+    prepInfo: {
+      canPrep: true,
+      method: "Cook and slice",
+      prepGroup: "Cooked Proteins",
+    },
+  },
+  broccoli: {
+    id: "broccoli",
+    name: "Broccoli",
+    prepInfo: {
+      canPrep: true,
+      method: "Cut into florets and roast or steam",
+      prepGroup: "Cooked Veggies",
+    },
+  },
+  brown_rice: {
+    id: "brown_rice",
+    name: "Brown Rice",
+    prepInfo: {
+      canPrep: true,
+      method: "Boil according to instructions",
+      prepGroup: "Boiled Grains",
+    },
+  },
+  tzatziki: {
+    id: "tzatziki",
+    name: "Tzatziki Sauce",
+    prepInfo: { canPrep: false },
+  },
+  banana: {
+    id: "banana",
+    name: "Banana",
+    prepInfo: { canPrep: false },
+  },
+  chia_seeds: {
+    id: "chia_seeds",
+    name: "Chia Seeds",
+    prepInfo: { canPrep: false },
+  },
+  honey: {
+    id: "honey",
+    name: "Honey",
+    prepInfo: { canPrep: false },
+  },
+  cottage_cheese: {
+    id: "cottage_cheese",
+    name: "Cottage Cheese",
+    prepInfo: { canPrep: false },
+  },
+  peach: {
+    id: "peach",
+    name: "Peach",
+    prepInfo: { canPrep: false },
+  },
+  almonds: {
+    id: "almonds",
+    name: "Almonds",
+    prepInfo: { canPrep: false },
+  },
+  tuna_can: {
+    id: "tuna_can",
+    name: "Canned Tuna",
+    prepInfo: { canPrep: false }, // Already prepped
+  },
+  mayonnaise: {
+    id: "mayonnaise",
+    name: "Light Mayonnaise",
+    prepInfo: { canPrep: false },
+  },
+  onion: {
+    id: "onion",
+    name: "Red Onion",
+    prepInfo: {
+      canPrep: true,
+      method: "Chop or slice",
+      prepGroup: "Chopped Aromatics",
+    },
+  },
+  whole_wheat_wrap: {
+    id: "whole_wheat_wrap",
+    name: "Whole Wheat Wrap",
+    prepInfo: { canPrep: false },
+  },
+  lentils: {
+    id: "lentils",
+    name: "Lentils",
+    prepInfo: {
+      canPrep: true,
+      method: "Boil until tender",
+      prepGroup: "Boiled Legumes",
+    },
+  },
+  carrot: {
+    id: "carrot",
+    name: "Carrot",
+    prepInfo: {
+      canPrep: true,
+      method: "Chop or grate",
+      prepGroup: "Chopped Veggies",
+    },
+  },
+  celery: {
+    id: "celery",
+    name: "Celery",
+    prepInfo: { canPrep: true, method: "Chop", prepGroup: "Chopped Veggies" },
+  },
+  vegetable_broth: {
+    id: "vegetable_broth",
+    name: "Vegetable Broth",
+    prepInfo: { canPrep: false },
+  },
+  shrimp: {
+    id: "shrimp",
+    name: "Shrimp",
+    prepInfo: {
+      canPrep: true,
+      method: "Cook until pink",
+      prepGroup: "Cooked Proteins",
+    },
+  },
+  garlic: {
+    id: "garlic",
+    name: "Garlic",
+    prepInfo: {
+      canPrep: true,
+      method: "Mince",
+      prepGroup: "Chopped Aromatics",
+    },
+  },
+  bell_pepper: {
+    id: "bell_pepper",
+    name: "Bell Pepper",
+    prepInfo: { canPrep: true, method: "Slice", prepGroup: "Chopped Veggies" },
+  },
+  black_beans: {
+    id: "black_beans",
+    name: "Black Beans",
+    prepInfo: { canPrep: false }, // Canned beans are already prepped
+  },
+  corn: {
+    id: "corn",
+    name: "Corn",
+    prepInfo: { canPrep: false }, // Canned corn is already prepped
+  },
+  lime: {
+    id: "lime",
+    name: "Lime",
+    prepInfo: { canPrep: false },
+  },
+  cod_filet: {
+    id: "cod_filet",
+    name: "Cod Filet",
+    prepInfo: {
+      canPrep: true,
+      method: "Bake or pan-sear",
+      prepGroup: "Cooked Proteins",
+    },
+  },
+  pesto: {
+    id: "pesto",
+    name: "Pesto",
+    prepInfo: { canPrep: false },
+  },
+  cherry_tomatoes: {
+    id: "cherry_tomatoes",
+    name: "Cherry Tomatoes",
+    prepInfo: {
+      canPrep: true,
+      method: "Halve or leave whole for roasting",
+      prepGroup: "Cooked Veggies",
+    },
+  },
 };
 
+// --- YOUR RECIPES (UNCHANGED) ---
 export const recipes = [
+  // ... (all your recipes remain exactly as you provided them)
   /* -------------------------------------------------------------------------- */
   /*                                  BREAKFAST                                 */
   /* -------------------------------------------------------------------------- */
@@ -180,7 +440,7 @@ export const recipes = [
       { ingredientId: "lemon", amount: 0.5, unit: "pcs" },
     ],
     instructions: [
-      "Preheat oven to 200°C (400°F ).",
+      "Preheat oven to 200°C (400°F  ).",
       "Toss asparagus with olive oil, salt, and pepper on a baking sheet.",
       "Place salmon filet on the same sheet. Season and squeeze lemon juice over it.",
       "Roast for 12-15 minutes, or until salmon is cooked to your liking.",
@@ -338,7 +598,7 @@ export const recipes = [
       { ingredientId: "spinach", amount: 100, unit: "g" },
     ],
     instructions: [
-      "Preheat oven to 190°C (375°F ).",
+      "Preheat oven to 190°C (375°F  ).",
       "Place the cod filet on a piece of parchment paper on a baking sheet.",
       "Spread the pesto evenly over the top of the cod.",
       "Scatter the cherry tomatoes around the filet.",
