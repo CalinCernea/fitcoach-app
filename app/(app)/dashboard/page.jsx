@@ -5,9 +5,10 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/utils/supabase";
+// --- MODIFICAT: Importăm funcțiile corecte ---
 import {
   generateAdvancedMealPlan,
-  regenerateSingleMeal,
+  getMealAlternatives,
 } from "@/utils/advancedMealPlanner";
 
 // UI Components
@@ -47,9 +48,12 @@ import {
   Droplets,
   ShoppingCart,
   BookOpen,
+  Replace, // --- NOU: Iconiță pentru Swap
 } from "lucide-react";
+// --- NOU: Importăm dialogul ---
+import { SwapMealDialog } from "@/components/SwapMealDialog";
 
-// --- Helper Functions ---
+// ... (păstrează funcțiile helper: getFormattedDate, getStartOfWeek, addDays, generateShoppingList, LoadingSpinner)
 const getFormattedDate = (date) => date.toISOString().split("T")[0];
 const getStartOfWeek = (date) => {
   const d = new Date(date);
@@ -102,6 +106,12 @@ export default function DashboardPage() {
   const [shoppingList, setShoppingList] = useState({});
   const [shoppingListPeriod, setShoppingListPeriod] = useState(7);
 
+  // --- NOU: Stări pentru dialogul de Swap ---
+  const [isSwapDialogOpen, setIsSwapDialogOpen] = useState(false);
+  const [mealAlternatives, setMealAlternatives] = useState([]);
+  const [swapMealIndex, setSwapMealIndex] = useState(null);
+
+  // ... (păstrează funcțiile: fetchPlansForWeek, fetchProfileAndPlans, useEffect-urile, ensureMealPlansExist, savePlan)
   const fetchPlansForWeek = useCallback(async (userId, weekStartDate) => {
     const datesToFetch = Array.from({ length: 7 }, (_, i) =>
       getFormattedDate(addDays(weekStartDate, i))
@@ -211,7 +221,7 @@ export default function DashboardPage() {
   const handleRegenerate = async () => {
     if (!profile) return;
     setLoading(true);
-    const newPlan = generateAdvancedMealPlan(profile);
+    const newPlan = await generateAdvancedMealPlan(profile);
     if (newPlan) {
       const dateString = getFormattedDate(currentDate);
       await savePlan(profile.id, dateString, newPlan);
@@ -221,28 +231,41 @@ export default function DashboardPage() {
     setLoading(false);
   };
 
-  const handleRegenerateSingleMeal = async (mealIndex) => {
-    if (!profile || !currentPlan) return;
-
-    const mealType =
-      currentPlan.plan[mealIndex].type ||
-      ["breakfast", "lunch", "dinner"][mealIndex];
-    const oldMeal = currentPlan.plan[mealIndex];
-
-    console.log("🔴 OLD MEAL:", oldMeal);
-    console.log("🔴 PROFILE:", profile);
-
-    const newMeal = regenerateSingleMeal(profile, mealType, oldMeal);
-
-    console.log("🟢 NEW MEAL:", newMeal);
-
-    if (!newMeal) {
-      console.error("Failed to generate a new meal.");
+  // --- NOU: Funcția care deschide dialogul de Swap ---
+  const handleOpenSwapDialog = async (mealIndex) => {
+    // --- NOU: Garda de siguranță ---
+    if (!profile || !currentPlan || !currentPlan.plan) {
+      console.error("Swap action aborted: currentPlan is not available.");
+      // Aici poți adăuga un toast de eroare dacă vrei
       return;
     }
 
+    const mealToSwap = currentPlan.plan[mealIndex];
+    const mealType =
+      mealToSwap.type || ["breakfast", "lunch", "dinner"][mealIndex];
+
+    const alternatives = await getMealAlternatives(
+      profile,
+      mealType,
+      mealToSwap
+    );
+
+    if (alternatives && alternatives.length > 0) {
+      setMealAlternatives(alternatives);
+      setSwapMealIndex(mealIndex);
+      setIsSwapDialogOpen(true);
+    } else {
+      console.warn("No alternatives found to swap.");
+      // Aici poți adăuga un toast.error("Could not find alternatives.")
+    }
+  };
+
+  // --- NOU: Funcția care se execută la selectarea unei mese noi ---
+  const handleSelectNewMeal = async (newMeal) => {
+    if (swapMealIndex === null) return;
+
     const newMealsArray = currentPlan.plan.map((meal, index) =>
-      index === mealIndex ? newMeal : meal
+      index === swapMealIndex ? newMeal : meal
     );
 
     const newTotals = newMealsArray.reduce(
@@ -263,10 +286,16 @@ export default function DashboardPage() {
 
     setCurrentPlan(newPlanState);
     const dateString = getFormattedDate(currentDate);
-    await savePlan(profile.id, dateString, newPlanState);
     setWeeklyPlans((prev) => new Map(prev).set(dateString, newPlanState));
+
+    await savePlan(profile.id, dateString, newPlanState);
+
+    setIsSwapDialogOpen(false);
+    setMealAlternatives([]);
+    setSwapMealIndex(null);
   };
 
+  // ... (păstrează funcțiile: changeWeek, handleDaySelect, handleLogout)
   const changeWeek = (offset) => {
     const newStartOfWeek = addDays(startOfWeek, offset * 7);
     setStartOfWeek(newStartOfWeek);
@@ -291,6 +320,15 @@ export default function DashboardPage() {
 
   return (
     <div className="w-full max-w-4xl mx-auto p-4">
+      {/* --- NOU: Adăugăm componenta Dialog aici, la nivel înalt --- */}
+      <SwapMealDialog
+        isOpen={isSwapDialogOpen}
+        onOpenChange={setIsSwapDialogOpen}
+        alternatives={mealAlternatives}
+        onSelectMeal={handleSelectNewMeal}
+      />
+
+      {/* ... (păstrează header-ul, secțiunea de shopping list, etc.) */}
       <header className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold">
@@ -357,6 +395,8 @@ export default function DashboardPage() {
           </Button>
         </div>
       </header>
+
+      {/* ... (păstrează Card-ul de Weekly Overview) */}
       <Card className="w-full mb-8">
         <CardHeader>
           <div className="flex justify-between items-center">
@@ -418,6 +458,7 @@ export default function DashboardPage() {
           })}
         </CardContent>
       </Card>
+
       <h2 className="text-2xl font-bold mb-4">
         Details for:{" "}
         {currentDate.toLocaleDateString("en-US", {
@@ -427,12 +468,14 @@ export default function DashboardPage() {
           day: "numeric",
         })}
       </h2>
+
       {!currentPlan ? (
         <div className="text-center p-8">
           Loading plan for the selected day...
         </div>
       ) : (
         <>
+          {/* ... (păstrează Card-ul "Day's Targets vs. Plan") */}
           <Card className="w-full mb-8">
             <CardHeader>
               <CardTitle>Day's Targets vs. Plan</CardTitle>
@@ -479,12 +522,14 @@ export default function DashboardPage() {
               </div>
             </CardContent>
           </Card>
+
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold">Meals for the Day</h2>
             <Button variant="outline" onClick={handleRegenerate}>
               <RefreshCw className="mr-2 h-4 w-4" /> Regenerate for this Day
             </Button>
           </div>
+
           <Accordion
             type="single"
             collapsible
@@ -494,7 +539,7 @@ export default function DashboardPage() {
             {currentPlan.plan.map((meal, index) => (
               <AccordionItem
                 value={`item-${index}`}
-                key={`${index}-${meal.name}-${meal.total_calories}`}
+                key={`${index}-${meal.id}-${meal.total_calories}`}
               >
                 <AccordionTrigger className="text-lg font-medium">
                   <div className="flex justify-between w-full pr-4">
@@ -583,14 +628,16 @@ export default function DashboardPage() {
                       )}
                     </div>
                   </div>
+                  {/* --- MODIFICAT: Butonul de la final --- */}
                   <div className="px-4 pb-2 flex justify-end">
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleRegenerateSingleMeal(index)}
+                      onClick={() => handleOpenSwapDialog(index)}
+                      disabled={!currentPlan}
                     >
-                      <RefreshCw className="mr-2 h-3 w-3" />
-                      Regenerate this meal
+                      <Replace className="mr-2 h-4 w-4" />
+                      Swap this Meal
                     </Button>
                   </div>
                 </AccordionContent>

@@ -277,3 +277,51 @@ export function regenerateSingleMeal(profile, mealType, oldMeal) {
 
   return newMeal;
 }
+
+export function getMealAlternatives(profile, mealType, currentMeal) {
+  const safeProfile = {
+    ...profile,
+    liked_foods: profile.liked_foods || [],
+    disliked_foods: profile.disliked_foods || [],
+  };
+
+  const { targetCalories, liked_foods, disliked_foods } = safeProfile;
+
+  if (!targetCalories) {
+    console.error("Cannot get alternatives: Missing target calories.");
+    return [];
+  }
+
+  const mealDistribution = { breakfast: 0.3, lunch: 0.4, dinner: 0.3 };
+  const distributionRatio = mealDistribution[mealType] || 0.33;
+  const mealTargetCalories = targetCalories * distributionRatio;
+
+  const alternatives = [];
+  const excludeIds = [currentMeal?.id].filter(Boolean); // Începem prin a exclude masa curentă
+
+  // Încercăm să generăm 3 alternative unice
+  for (let i = 0; i < 3; i++) {
+    const recipe = selectRecipe(
+      mealType,
+      liked_foods,
+      disliked_foods,
+      excludeIds
+    );
+
+    if (recipe) {
+      const meal = createMealFromRecipe(
+        recipe,
+        mealTargetCalories,
+        mealType,
+        safeProfile
+      );
+      alternatives.push(meal);
+      excludeIds.push(recipe.id); // Adăugăm rețeta la lista de excludere pentru următoarea iterație
+    } else {
+      // Dacă nu mai găsim rețete unice, ne oprim
+      break;
+    }
+  }
+
+  return alternatives;
+}
