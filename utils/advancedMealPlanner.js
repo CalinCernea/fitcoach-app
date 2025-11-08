@@ -5,16 +5,11 @@ import { ingredients as allIngredients, recipes } from "./recipeDatabase";
  * Creează o masă scalată dintr-o rețetă de bază pentru a atinge ținta calorică.
  * Valorile nutriționale sunt calculate pe baza rețetei și a scalării.
  */
-function createMealFromRecipe(
-  recipe,
-  targetCalories,
-  mealType,
-  profile = null
-) {
+function createMealFromRecipe(recipe, targetCalories, mealType, profile) {
   if (!recipe) {
     return {
       id: "error-meal",
-      name: "Error: No Recipe Found",
+      name: "Error: No Recipe",
       type: mealType,
       imageUrl: "",
       instructions: [],
@@ -26,6 +21,7 @@ function createMealFromRecipe(
     };
   }
 
+  // Păstrăm logica ta originală de scalare
   const scalingFactor =
     recipe.baseCalories > 0 ? targetCalories / recipe.baseCalories : 1;
 
@@ -35,13 +31,15 @@ function createMealFromRecipe(
     type: mealType,
     imageUrl: recipe.imageUrl,
     instructions: recipe.instructions,
+    ingredients: [],
+    // Inițializăm totul cu 0
     total_calories: 0,
     total_protein: 0,
     total_carbs: 0,
     total_fats: 0,
-    ingredients: [],
   };
 
+  // Scalăm ingredientele
   recipe.ingredients.forEach((ing) => {
     const scaledAmount = Math.round(ing.amount * scalingFactor);
     if (scaledAmount > 0) {
@@ -54,45 +52,26 @@ function createMealFromRecipe(
     }
   });
 
-  // Calculăm caloriile scalate
-  scaledMeal.total_calories = Math.round(recipe.baseCalories * scalingFactor);
+  // Păstrăm logica ta originală de calcul al macronutrienților cu variație
+  const variation = () => 0.9 + Math.random() * 0.2;
+  const mealDistribution = { breakfast: 0.3, lunch: 0.4, dinner: 0.3 };
+  const ratio = mealDistribution[mealType] || 0.33;
 
-  // Calculăm macronutrienții pe baza rețetei și profilului
-  if (
-    profile &&
-    profile.targetProtein &&
-    profile.targetCarbs &&
-    profile.targetFats
-  ) {
-    // Calculăm distribuția pe baza tipului de masă
-    const mealDistribution = { breakfast: 0.3, lunch: 0.4, dinner: 0.3 };
-    const ratio = mealDistribution[mealType] || 0.33;
+  scaledMeal.total_protein = Math.round(
+    profile.targetProtein * ratio * variation()
+  );
+  scaledMeal.total_carbs = Math.round(
+    profile.targetCarbs * ratio * variation()
+  );
+  scaledMeal.total_fats = Math.round(profile.targetFats * ratio * variation());
 
-    // Adăugăm variație aleatorie de ±10% pentru fiecare macronutrient
-    const variation = () => 0.9 + Math.random() * 0.2; // între 0.9 și 1.1
-
-    scaledMeal.total_protein = Math.round(
-      profile.targetProtein * ratio * variation()
-    );
-    scaledMeal.total_carbs = Math.round(
-      profile.targetCarbs * ratio * variation()
-    );
-    scaledMeal.total_fats = Math.round(
-      profile.targetFats * ratio * variation()
-    );
-  } else {
-    // Fallback: calculăm pe baza caloriilor cu variație
-    const variation = () => 0.9 + Math.random() * 0.2;
-    scaledMeal.total_carbs = Math.round(
-      (scaledMeal.total_calories * 0.45 * variation()) / 4
-    );
-    scaledMeal.total_protein = Math.round(
-      (scaledMeal.total_calories * 0.3 * variation()) / 4
-    );
-    scaledMeal.total_fats = Math.round(
-      (scaledMeal.total_calories * 0.25 * variation()) / 9
-    );
-  }
+  // --- 🔥 AICI ESTE SINGURA MODIFICARE IMPORTANTĂ 🔥 ---
+  // Recalculăm caloriile totale pe baza macronutrienților proaspăt generați,
+  // în loc să le luăm pe cele scalate, care erau sursa bug-ului.
+  scaledMeal.total_calories =
+    scaledMeal.total_protein * 4 +
+    scaledMeal.total_carbs * 4 +
+    scaledMeal.total_fats * 9;
 
   return scaledMeal;
 }
