@@ -2,12 +2,12 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation"; // Am eliminat useSearchParams, nu era folosit
 import Link from "next/link";
 import { supabase } from "@/utils/supabase";
 import {
   generateAdvancedMealPlan,
-  regenerateSingleMeal,
+  // regenerateSingleMeal, // Am eliminat funcția nefolosită
   getMealAlternatives,
 } from "@/utils/advancedMealPlanner";
 
@@ -50,8 +50,10 @@ import {
   BookOpen,
   ChefHat,
   Sparkles,
+  Replace, // MODIFICARE: Adăugăm iconița pentru Swap
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { SwapMealDialog } from "@/components/SwapMealDialog"; // MODIFICARE: Importăm dialogul
 
 // Helper Functions
 const getFormattedDate = (date) => date.toISOString().split("T")[0];
@@ -106,6 +108,11 @@ export default function DashboardPage() {
   const [shoppingListPeriod, setShoppingListPeriod] = useState(7);
   const [preppedComponents, setPreppedComponents] = useState(null);
 
+  // MODIFICARE: Adăugăm stările pentru dialogul de Swap
+  const [isSwapDialogOpen, setIsSwapDialogOpen] = useState(false);
+  const [mealAlternatives, setMealAlternatives] = useState([]);
+  const [swapMealIndex, setSwapMealIndex] = useState(null);
+
   const fetchPlansForWeek = useCallback(async (userId, weekStartDate) => {
     const datesToFetch = Array.from({ length: 7 }, (_, i) =>
       getFormattedDate(addDays(weekStartDate, i))
@@ -146,15 +153,12 @@ export default function DashboardPage() {
     }
     setProfile(userProfile);
 
-    // Verificăm dacă există prep_status și dacă nu a expirat
     if (userProfile.prep_status) {
       const expiryDate = new Date(userProfile.prep_status.expiresAt);
       const now = new Date();
-
       if (expiryDate > now) {
         setPreppedComponents(userProfile.prep_status.components);
       } else {
-        // A expirat - ștergem statusul
         await supabase
           .from("profiles")
           .update({ prep_status: null })
@@ -244,28 +248,35 @@ export default function DashboardPage() {
     setLoading(false);
   };
 
-  const handleRegenerateSingleMeal = async (mealIndex) => {
-    if (!profile || !currentPlan) return;
-
+  // MODIFICARE: Adăugăm funcțiile pentru Swap
+  const handleOpenSwapDialog = async (mealIndex) => {
+    if (!profile || !currentPlan || !currentPlan.plan) {
+      return;
+    }
+    const mealToSwap = currentPlan.plan[mealIndex];
     const mealType =
-      currentPlan.plan[mealIndex].type ||
-      ["breakfast", "lunch", "dinner"][mealIndex];
-    const oldMeal = currentPlan.plan[mealIndex];
-
-    const newMeal = regenerateSingleMeal(
+      mealToSwap.type || ["breakfast", "lunch", "dinner"][mealIndex];
+    const alternatives = getMealAlternatives(
       profile,
       mealType,
-      oldMeal,
+      mealToSwap,
       preppedComponents
     );
 
-    if (!newMeal) {
-      console.error("Failed to generate a new meal.");
-      return;
+    if (alternatives && alternatives.length > 0) {
+      setMealAlternatives(alternatives);
+      setSwapMealIndex(mealIndex);
+      setIsSwapDialogOpen(true);
+    } else {
+      console.warn("No alternatives found to swap.");
     }
+  };
+
+  const handleSelectNewMeal = async (newMeal) => {
+    if (swapMealIndex === null) return;
 
     const newMealsArray = currentPlan.plan.map((meal, index) =>
-      index === mealIndex ? newMeal : meal
+      index === swapMealIndex ? newMeal : meal
     );
 
     const newTotals = newMealsArray.reduce(
@@ -288,6 +299,10 @@ export default function DashboardPage() {
     const dateString = getFormattedDate(currentDate);
     await savePlan(profile.id, dateString, newPlanState);
     setWeeklyPlans((prev) => new Map(prev).set(dateString, newPlanState));
+
+    setIsSwapDialogOpen(false);
+    setMealAlternatives([]);
+    setSwapMealIndex(null);
   };
 
   const changeWeek = (offset) => {
@@ -316,6 +331,14 @@ export default function DashboardPage() {
 
   return (
     <div className="w-full max-w-4xl mx-auto p-4">
+      {/* MODIFICARE: Adăugăm componenta Dialog aici */}
+      <SwapMealDialog
+        isOpen={isSwapDialogOpen}
+        onOpenChange={setIsSwapDialogOpen}
+        alternatives={mealAlternatives}
+        onSelectMeal={handleSelectNewMeal}
+      />
+
       <header className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold">
@@ -389,7 +412,6 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* Prep Mode Status Banner */}
       {preppedComponents && (
         <Card className="mb-6 border-green-500 bg-green-50 dark:bg-green-900/20">
           <CardContent className="pt-6">
@@ -605,7 +627,6 @@ export default function DashboardPage() {
                         <ShoppingCart className="h-4 w-4" /> Ingredients
                       </h4>
 
-                      {/* Afișăm ingredientele separate dacă suntem în prep mode */}
                       {meal.isPrepMode && meal.categorizedIngredients ? (
                         <>
                           {meal.categorizedIngredients.prepped.length > 0 && (
@@ -701,14 +722,15 @@ export default function DashboardPage() {
                       )}
                     </div>
                   </div>
+                  {/* MODIFICARE: Înlocuim butonul de Regenerate cu Swap */}
                   <div className="px-4 pb-2 flex justify-end">
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleRegenerateSingleMeal(index)}
+                      onClick={() => handleOpenSwapDialog(index)}
                     >
-                      <RefreshCw className="mr-2 h-3 w-3" />
-                      Regenerate this meal
+                      <Replace className="mr-2 h-3 w-3" />
+                      Swap this meal
                     </Button>
                   </div>
                 </AccordionContent>

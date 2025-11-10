@@ -396,7 +396,12 @@ export function regenerateSingleMeal(
 }
 
 // Funcție helper pentru a obține alternative de mese
-export function getMealAlternatives(profile, mealType, currentMeal) {
+export function getMealAlternatives(
+  profile,
+  mealType,
+  currentMeal,
+  preppedComponents = null
+) {
   const safeProfile = {
     ...profile,
     liked_foods: profile.liked_foods || [],
@@ -418,7 +423,13 @@ export function getMealAlternatives(profile, mealType, currentMeal) {
     )
     .slice(0, 5) // Limităm la 5 alternative
     .map((recipe) =>
-      createMealFromRecipe(recipe, mealTargetCalories, mealType, safeProfile)
+      createMealFromRecipe(
+        recipe,
+        mealTargetCalories,
+        mealType,
+        safeProfile,
+        preppedComponents
+      )
     );
 
   return alternatives;
