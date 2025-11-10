@@ -2,43 +2,81 @@
 
 import { ingredients as allIngredients } from "./recipeDatabase.js";
 
-// --- NOU: Creăm un dicționar invers pentru a găsi ID-ul pe baza numelui ---
-// Acest obiect va arăta așa: { "Chicken Breast": "chicken_breast", "Quinoa": "quinoa", ... }
-const nameToIdMap = Object.fromEntries(
-  Object.entries(allIngredients).map(([id, data]) => [data.name, id])
-);
-
 /**
  * Analizează planurile de masă pentru mai multe zile și generează o listă de componente
  * care pot fi pregătite în avans (meal prep).
  */
 export function generatePrepList(dailyPlans) {
+  console.log("🔍 generatePrepList called with:", dailyPlans);
+
   const aggregatedComponents = {};
 
   for (const plan of dailyPlans) {
     if (!plan || !plan.plan_data || !plan.plan_data.plan) {
+      console.warn("⚠️ Invalid plan structure:", plan);
       continue;
     }
 
+    console.log("📅 Processing plan for date:", plan.plan_date);
+
     for (const meal of plan.plan_data.plan) {
       if (!meal.ingredients) {
+        console.warn("⚠️ Meal has no ingredients:", meal.name);
         continue;
       }
 
-      for (const ingredient of meal.ingredients) {
-        // --- MODIFICAT: Folosim dicționarul invers pentru a găsi ID-ul corect ---
-        const ingredientId = nameToIdMap[ingredient.name];
-        const ingredientInfo = ingredientId
-          ? allIngredients[ingredientId]
-          : null;
+      console.log(
+        `🍽️ Processing meal: ${meal.name} with ${meal.ingredients.length} ingredients`
+      );
 
-        if (
-          ingredientInfo &&
-          ingredientInfo.prepInfo &&
-          ingredientInfo.prepInfo.canPrep
-        ) {
+      for (const ingredient of meal.ingredients) {
+        // Căutăm ingredientul în dicționarul nostru
+        // Încercăm mai multe variante de matching
+        let ingredientId = null;
+        let ingredientInfo = null;
+
+        // Varianta 1: Căutăm exact după nume
+        const exactMatch = Object.entries(allIngredients).find(
+          ([id, info]) =>
+            info.name.toLowerCase() === ingredient.name.toLowerCase()
+        );
+
+        if (exactMatch) {
+          ingredientId = exactMatch[0];
+          ingredientInfo = exactMatch[1];
+        } else {
+          // Varianta 2: Căutăm parțial (ex: "Chicken Breast" conține "Chicken")
+          const partialMatch = Object.entries(allIngredients).find(
+            ([id, info]) =>
+              info.name.toLowerCase().includes(ingredient.name.toLowerCase()) ||
+              ingredient.name.toLowerCase().includes(info.name.toLowerCase())
+          );
+
+          if (partialMatch) {
+            ingredientId = partialMatch[0];
+            ingredientInfo = partialMatch[1];
+          }
+        }
+
+        if (!ingredientInfo) {
+          console.warn(
+            `❌ Ingredient not found in database: "${ingredient.name}"`
+          );
+          continue;
+        }
+
+        console.log(
+          `✅ Found ingredient: ${ingredientInfo.name} (ID: ${ingredientId})`
+        );
+
+        // Verificăm dacă poate fi pregătit
+        if (ingredientInfo.prepInfo && ingredientInfo.prepInfo.canPrep) {
           const prepGroup = ingredientInfo.prepInfo.prepGroup;
           const amount = Number(ingredient.amount) || 0;
+
+          console.log(
+            `📦 Can prep: ${ingredientInfo.name} - ${amount}${ingredient.unit} (Group: ${prepGroup})`
+          );
 
           if (!aggregatedComponents[prepGroup]) {
             aggregatedComponents[prepGroup] = {};
@@ -49,12 +87,18 @@ export function generatePrepList(dailyPlans) {
           }
 
           aggregatedComponents[prepGroup][ingredientId] += amount;
+        } else {
+          console.log(
+            `⏭️ Cannot prep (fresh ingredient): ${ingredientInfo.name}`
+          );
         }
       }
     }
   }
 
-  // Restul funcției rămâne neschimbat
+  console.log("📊 Aggregated components:", aggregatedComponents);
+
+  // Transformăm în format pentru UI
   const prepList = Object.entries(aggregatedComponents).map(
     ([groupName, ingredients]) => {
       return {
@@ -75,10 +119,11 @@ export function generatePrepList(dailyPlans) {
     }
   );
 
+  console.log("✨ Final prep list:", prepList);
+
   return prepList;
 }
 
-// --- Funcția generatePrepSteps rămâne neschimbată ---
 const prepGroupPriorities = {
   "Chopped Aromatics": 1,
   "Chopped Veggies": 2,

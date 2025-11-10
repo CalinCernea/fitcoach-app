@@ -2,14 +2,128 @@
 import { ingredients as allIngredients, recipes } from "./recipeDatabase";
 
 /**
- * Creează o masă scalată dintr-o rețetă de bază pentru a atinge ținta calorică.
- * Valorile nutriționale sunt calculate pe baza rețetei și a scalării.
+ * Verifică dacă un ingredient este în lista de componente pregătite
  */
-function createMealFromRecipe(recipe, targetCalories, mealType, profile) {
+function isIngredientPrepped(ingredientId, preppedComponents) {
+  if (!preppedComponents || preppedComponents.length === 0) return false;
+
+  return preppedComponents.some((group) =>
+    group.items.some((item) => item.id === ingredientId)
+  );
+}
+
+/**
+ * Generează instrucțiuni adaptate pentru prep mode
+ */
+function generatePrepModeInstructions(recipe, preppedComponents) {
+  const preppedIngredients = recipe.ingredients.filter((ing) =>
+    isIngredientPrepped(ing.ingredientId, preppedComponents)
+  );
+
+  const freshIngredients = recipe.ingredients.filter(
+    (ing) => !isIngredientPrepped(ing.ingredientId, preppedComponents)
+  );
+
+  const instructions = [];
+
+  // Instrucțiuni pentru ingrediente fresh
+  if (freshIngredients.length > 0) {
+    const freshNames = freshIngredients
+      .map((ing) => allIngredients[ing.ingredientId]?.name)
+      .filter(Boolean);
+
+    if (freshNames.length > 0) {
+      instructions.push(
+        `Prepare the fresh ingredients: ${freshNames.join(", ")}.`
+      );
+    }
+  }
+
+  // Instrucțiuni pentru ingrediente pregătite
+  if (preppedIngredients.length > 0) {
+    const preppedNames = preppedIngredients
+      .map((ing) => allIngredients[ing.ingredientId]?.name)
+      .filter(Boolean);
+
+    if (preppedNames.length > 0) {
+      instructions.push(
+        `Take your prepped ingredients from the fridge: ${preppedNames.join(
+          ", "
+        )}.`
+      );
+    }
+  }
+
+  // Instrucțiune de asamblare
+  instructions.push(
+    `Assemble the ${recipe.name}: combine all ingredients as needed.`
+  );
+
+  // Dacă e necesar să se încălzească
+  if (
+    preppedIngredients.some((ing) => {
+      const ingredientInfo = allIngredients[ing.ingredientId];
+      return (
+        ingredientInfo?.prepInfo?.prepGroup === "Cooked Proteins" ||
+        ingredientInfo?.prepInfo?.prepGroup === "Boiled Grains"
+      );
+    })
+  ) {
+    instructions.push(
+      "Reheat the prepped components if desired (microwave 1-2 minutes or stovetop)."
+    );
+  }
+
+  instructions.push("Serve and enjoy your meal!");
+
+  return instructions;
+}
+
+/**
+ * Categorizes ingredients into prepped vs fresh
+ */
+function categorizeIngredients(recipe, preppedComponents) {
+  const categorized = {
+    prepped: [],
+    fresh: [],
+  };
+
+  recipe.ingredients.forEach((ing) => {
+    const ingredientInfo = allIngredients[ing.ingredientId];
+    const isPrepped = isIngredientPrepped(ing.ingredientId, preppedComponents);
+
+    const ingredientData = {
+      name: ingredientInfo.name,
+      amount: ing.amount,
+      unit: ing.unit,
+      isPrepped: isPrepped,
+    };
+
+    if (isPrepped) {
+      categorized.prepped.push(ingredientData);
+    } else {
+      categorized.fresh.push(ingredientData);
+    }
+  });
+
+  return categorized;
+}
+
+/**
+ * Creează o masă scalată dintr-o rețetă de bază pentru a atinge ținta calorică.
+ * MODIFICAT: Acceptă și preppedComponents pentru a genera instrucțiuni adaptate.
+ */
+function createMealFromRecipe(
+  recipe,
+  targetCalories,
+  mealType,
+  profile = null,
+  preppedComponents = null
+) {
   if (!recipe) {
     return {
       id: "error-meal",
-      name: "Error: No Recipe",
+      name: "Error: No Recipe Found",
       type: mealType,
       imageUrl: "",
       instructions: [],
@@ -18,10 +132,10 @@ function createMealFromRecipe(recipe, targetCalories, mealType, profile) {
       total_carbs: 0,
       total_fats: 0,
       ingredients: [],
+      categorizedIngredients: { prepped: [], fresh: [] },
     };
   }
 
-  // Păstrăm logica ta originală de scalare
   const scalingFactor =
     recipe.baseCalories > 0 ? targetCalories / recipe.baseCalories : 1;
 
@@ -31,47 +145,84 @@ function createMealFromRecipe(recipe, targetCalories, mealType, profile) {
     type: mealType,
     imageUrl: recipe.imageUrl,
     instructions: recipe.instructions,
-    ingredients: [],
-    // Inițializăm totul cu 0
     total_calories: 0,
     total_protein: 0,
     total_carbs: 0,
     total_fats: 0,
+    ingredients: [],
+    categorizedIngredients: { prepped: [], fresh: [] },
   };
 
-  // Scalăm ingredientele
-  recipe.ingredients.forEach((ing) => {
-    const scaledAmount = Math.round(ing.amount * scalingFactor);
-    if (scaledAmount > 0) {
+  // Scale ingredients
+  const scaledRecipe = {
+    ...recipe,
+    ingredients: recipe.ingredients.map((ing) => ({
+      ...ing,
+      amount: Math.round(ing.amount * scalingFactor),
+    })),
+  };
+
+  scaledRecipe.ingredients.forEach((ing) => {
+    if (ing.amount > 0) {
       const ingredientInfo = allIngredients[ing.ingredientId];
       scaledMeal.ingredients.push({
         name: ingredientInfo.name,
-        amount: scaledAmount,
+        amount: ing.amount,
         unit: ing.unit,
       });
     }
   });
 
-  // Păstrăm logica ta originală de calcul al macronutrienților cu variație
-  const variation = () => 0.9 + Math.random() * 0.2;
-  const mealDistribution = { breakfast: 0.3, lunch: 0.4, dinner: 0.3 };
-  const ratio = mealDistribution[mealType] || 0.33;
+  // Dacă avem componente pregătite, generăm instrucțiuni adaptate
+  if (preppedComponents && preppedComponents.length > 0) {
+    scaledMeal.instructions = generatePrepModeInstructions(
+      scaledRecipe,
+      preppedComponents
+    );
+    scaledMeal.categorizedIngredients = categorizeIngredients(
+      scaledRecipe,
+      preppedComponents
+    );
+    scaledMeal.isPrepMode = true;
+  } else {
+    scaledMeal.isPrepMode = false;
+  }
 
-  scaledMeal.total_protein = Math.round(
-    profile.targetProtein * ratio * variation()
-  );
-  scaledMeal.total_carbs = Math.round(
-    profile.targetCarbs * ratio * variation()
-  );
-  scaledMeal.total_fats = Math.round(profile.targetFats * ratio * variation());
+  // Calculăm caloriile scalate
+  scaledMeal.total_calories = Math.round(recipe.baseCalories * scalingFactor);
 
-  // --- 🔥 AICI ESTE SINGURA MODIFICARE IMPORTANTĂ 🔥 ---
-  // Recalculăm caloriile totale pe baza macronutrienților proaspăt generați,
-  // în loc să le luăm pe cele scalate, care erau sursa bug-ului.
-  scaledMeal.total_calories =
-    scaledMeal.total_protein * 4 +
-    scaledMeal.total_carbs * 4 +
-    scaledMeal.total_fats * 9;
+  // Calculăm macronutrienții
+  if (
+    profile &&
+    profile.targetProtein &&
+    profile.targetCarbs &&
+    profile.targetFats
+  ) {
+    const mealDistribution = { breakfast: 0.3, lunch: 0.4, dinner: 0.3 };
+    const ratio = mealDistribution[mealType] || 0.33;
+    const variation = () => 0.9 + Math.random() * 0.2;
+
+    scaledMeal.total_protein = Math.round(
+      profile.targetProtein * ratio * variation()
+    );
+    scaledMeal.total_carbs = Math.round(
+      profile.targetCarbs * ratio * variation()
+    );
+    scaledMeal.total_fats = Math.round(
+      profile.targetFats * ratio * variation()
+    );
+  } else {
+    const variation = () => 0.9 + Math.random() * 0.2;
+    scaledMeal.total_carbs = Math.round(
+      (scaledMeal.total_calories * 0.45 * variation()) / 4
+    );
+    scaledMeal.total_protein = Math.round(
+      (scaledMeal.total_calories * 0.3 * variation()) / 4
+    );
+    scaledMeal.total_fats = Math.round(
+      (scaledMeal.total_calories * 0.25 * variation()) / 9
+    );
+  }
 
   return scaledMeal;
 }
@@ -85,12 +236,6 @@ function selectRecipe(
   disliked_foods = [],
   excludeIds = []
 ) {
-  console.log("🔍 selectRecipe called:", {
-    mealType,
-    liked_foods,
-    disliked_foods,
-  });
-
   let potentialRecipes = recipes.filter(
     (r) =>
       r.mealType.includes(mealType) &&
@@ -98,16 +243,7 @@ function selectRecipe(
       !excludeIds.includes(r.id)
   );
 
-  console.log(
-    "📋 Filtered recipes:",
-    potentialRecipes.map((r) => ({ id: r.id, tags: r.tags }))
-  );
-
   if (potentialRecipes.length === 0) {
-    console.warn(
-      "⚠️ No recipes found matching preferences. Trying without excludeIds..."
-    );
-    // Fallback 1: Reîncercăm fără excludeIds (permite re-selectarea aceluiași meal)
     potentialRecipes = recipes.filter(
       (r) =>
         r.mealType.includes(mealType) &&
@@ -115,19 +251,11 @@ function selectRecipe(
     );
 
     if (potentialRecipes.length === 0) {
-      console.warn(
-        "⚠️ Still no recipes without disliked foods. Trying only with mealType..."
-      );
-      // Fallback 2: Ignorăm excludeIds dar păstrăm disliked
       potentialRecipes = recipes.filter(
         (r) => r.mealType.includes(mealType) && !excludeIds.includes(r.id)
       );
 
       if (potentialRecipes.length === 0) {
-        console.warn(
-          "⚠️ Last resort: returning all recipes for this meal type."
-        );
-        // Fallback 3: Ultimul resort - toate rețetele pentru acest tip de masă
         potentialRecipes = recipes.filter((r) => r.mealType.includes(mealType));
       }
     }
@@ -153,7 +281,7 @@ function selectRecipe(
 /*                      Funcții Exportate                                     */
 /* -------------------------------------------------------------------------- */
 
-export function generateAdvancedMealPlan(profile) {
+export function generateAdvancedMealPlan(profile, preppedComponents = null) {
   const safeProfile = {
     ...profile,
     liked_foods: profile.liked_foods || [],
@@ -191,19 +319,22 @@ export function generateAdvancedMealPlan(profile) {
     breakfastRecipe,
     breakfastCalories,
     "breakfast",
-    safeProfile
+    safeProfile,
+    preppedComponents
   );
   const lunch = createMealFromRecipe(
     lunchRecipe,
     lunchCalories,
     "lunch",
-    safeProfile
+    safeProfile,
+    preppedComponents
   );
   const dinner = createMealFromRecipe(
     dinnerRecipe,
     dinnerCalories,
     "dinner",
-    safeProfile
+    safeProfile,
+    preppedComponents
   );
 
   const plan = [breakfast, lunch, dinner];
@@ -221,19 +352,17 @@ export function generateAdvancedMealPlan(profile) {
   return { plan, totals, error: null };
 }
 
-export function regenerateSingleMeal(profile, mealType, oldMeal) {
+export function regenerateSingleMeal(
+  profile,
+  mealType,
+  oldMeal,
+  preppedComponents = null
+) {
   const safeProfile = {
     ...profile,
     liked_foods: profile.liked_foods || [],
     disliked_foods: profile.disliked_foods || [],
   };
-
-  console.log("🔄 regenerateSingleMeal called:", {
-    mealType,
-    oldMealId: oldMeal?.id,
-    liked: safeProfile.liked_foods,
-    disliked: safeProfile.disliked_foods,
-  });
 
   const { targetCalories, liked_foods, disliked_foods } = safeProfile;
 
@@ -259,25 +388,14 @@ export function regenerateSingleMeal(profile, mealType, oldMeal) {
     newRecipe,
     mealTargetCalories,
     mealType,
-    safeProfile // Pasăm întregul profil
+    safeProfile,
+    preppedComponents
   );
-
-  console.log("✅ Meal regenerated:", {
-    old: {
-      id: oldMeal?.id,
-      cal: oldMeal?.total_calories,
-      protein: oldMeal?.total_protein,
-    },
-    new: {
-      id: newMeal.id,
-      cal: newMeal.total_calories,
-      protein: newMeal.total_protein,
-    },
-  });
 
   return newMeal;
 }
 
+// Funcție helper pentru a obține alternative de mese
 export function getMealAlternatives(profile, mealType, currentMeal) {
   const safeProfile = {
     ...profile,
@@ -286,42 +404,22 @@ export function getMealAlternatives(profile, mealType, currentMeal) {
   };
 
   const { targetCalories, liked_foods, disliked_foods } = safeProfile;
-
-  if (!targetCalories) {
-    console.error("Cannot get alternatives: Missing target calories.");
-    return [];
-  }
-
   const mealDistribution = { breakfast: 0.3, lunch: 0.4, dinner: 0.3 };
   const distributionRatio = mealDistribution[mealType] || 0.33;
   const mealTargetCalories = targetCalories * distributionRatio;
 
-  const alternatives = [];
-  const excludeIds = [currentMeal?.id].filter(Boolean); // Începem prin a exclude masa curentă
-
-  // Încercăm să generăm 3 alternative unice
-  for (let i = 0; i < 3; i++) {
-    const recipe = selectRecipe(
-      mealType,
-      liked_foods,
-      disliked_foods,
-      excludeIds
+  // Obținem toate rețetele potrivite pentru acest tip de masă
+  const alternatives = recipes
+    .filter(
+      (r) =>
+        r.mealType.includes(mealType) &&
+        r.id !== currentMeal?.id &&
+        !r.tags.some((tag) => disliked_foods.includes(tag))
+    )
+    .slice(0, 5) // Limităm la 5 alternative
+    .map((recipe) =>
+      createMealFromRecipe(recipe, mealTargetCalories, mealType, safeProfile)
     );
-
-    if (recipe) {
-      const meal = createMealFromRecipe(
-        recipe,
-        mealTargetCalories,
-        mealType,
-        safeProfile
-      );
-      alternatives.push(meal);
-      excludeIds.push(recipe.id); // Adăugăm rețeta la lista de excludere pentru următoarea iterație
-    } else {
-      // Dacă nu mai găsim rețete unice, ne oprim
-      break;
-    }
-  }
 
   return alternatives;
 }

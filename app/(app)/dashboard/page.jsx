@@ -2,12 +2,12 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/utils/supabase";
-// --- MODIFICAT: Importăm funcțiile corecte ---
 import {
   generateAdvancedMealPlan,
+  regenerateSingleMeal,
   getMealAlternatives,
 } from "@/utils/advancedMealPlanner";
 
@@ -48,13 +48,12 @@ import {
   Droplets,
   ShoppingCart,
   BookOpen,
-  Replace,
-  ChefHat, // --- NOU ---
+  ChefHat,
+  Sparkles,
 } from "lucide-react";
-// --- NOU: Importăm dialogul ---
-import { SwapMealDialog } from "@/components/SwapMealDialog";
+import { Badge } from "@/components/ui/badge";
 
-// ... (păstrează funcțiile helper: getFormattedDate, getStartOfWeek, addDays, generateShoppingList, LoadingSpinner)
+// Helper Functions
 const getFormattedDate = (date) => date.toISOString().split("T")[0];
 const getStartOfWeek = (date) => {
   const d = new Date(date);
@@ -94,7 +93,6 @@ const LoadingSpinner = () => (
   </div>
 );
 
-// --- Main Component ---
 export default function DashboardPage() {
   const router = useRouter();
   const [profile, setProfile] = useState(null);
@@ -106,13 +104,8 @@ export default function DashboardPage() {
   const [weeklyPlans, setWeeklyPlans] = useState(new Map());
   const [shoppingList, setShoppingList] = useState({});
   const [shoppingListPeriod, setShoppingListPeriod] = useState(7);
+  const [preppedComponents, setPreppedComponents] = useState(null);
 
-  // --- NOU: Stări pentru dialogul de Swap ---
-  const [isSwapDialogOpen, setIsSwapDialogOpen] = useState(false);
-  const [mealAlternatives, setMealAlternatives] = useState([]);
-  const [swapMealIndex, setSwapMealIndex] = useState(null);
-
-  // ... (păstrează funcțiile: fetchPlansForWeek, fetchProfileAndPlans, useEffect-urile, ensureMealPlansExist, savePlan)
   const fetchPlansForWeek = useCallback(async (userId, weekStartDate) => {
     const datesToFetch = Array.from({ length: 7 }, (_, i) =>
       getFormattedDate(addDays(weekStartDate, i))
@@ -152,6 +145,24 @@ export default function DashboardPage() {
       return;
     }
     setProfile(userProfile);
+
+    // Verificăm dacă există prep_status și dacă nu a expirat
+    if (userProfile.prep_status) {
+      const expiryDate = new Date(userProfile.prep_status.expiresAt);
+      const now = new Date();
+
+      if (expiryDate > now) {
+        setPreppedComponents(userProfile.prep_status.components);
+      } else {
+        // A expirat - ștergem statusul
+        await supabase
+          .from("profiles")
+          .update({ prep_status: null })
+          .eq("id", user.id);
+        setPreppedComponents(null);
+      }
+    }
+
     await ensureMealPlansExist(user.id, userProfile);
     const plansMap = await fetchPlansForWeek(user.id, startOfWeek);
     const todayString = getFormattedDate(currentDate);
@@ -172,6 +183,7 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchProfileAndPlans();
   }, [fetchProfileAndPlans]);
+
   useEffect(() => {
     if (weeklyPlans.size > 0) {
       const plansForPeriod = Array.from(weeklyPlans.values()).slice(
@@ -203,7 +215,7 @@ export default function DashboardPage() {
     const missingDates = datesToCheck.filter((d) => !existingDates.has(d));
     if (missingDates.length > 0) {
       const plansToInsert = missingDates.map((date) => {
-        const plan = generateAdvancedMealPlan(userProfile);
+        const plan = generateAdvancedMealPlan(userProfile, preppedComponents);
         return { user_id: userId, plan_date: date, plan_data: plan };
       });
       await supabase.from("daily_meal_plans").insert(plansToInsert);
@@ -222,7 +234,7 @@ export default function DashboardPage() {
   const handleRegenerate = async () => {
     if (!profile) return;
     setLoading(true);
-    const newPlan = await generateAdvancedMealPlan(profile);
+    const newPlan = generateAdvancedMealPlan(profile, preppedComponents);
     if (newPlan) {
       const dateString = getFormattedDate(currentDate);
       await savePlan(profile.id, dateString, newPlan);
@@ -232,41 +244,28 @@ export default function DashboardPage() {
     setLoading(false);
   };
 
-  // --- NOU: Funcția care deschide dialogul de Swap ---
-  const handleOpenSwapDialog = async (mealIndex) => {
-    // --- NOU: Garda de siguranță ---
-    if (!profile || !currentPlan || !currentPlan.plan) {
-      console.error("Swap action aborted: currentPlan is not available.");
-      // Aici poți adăuga un toast de eroare dacă vrei
+  const handleRegenerateSingleMeal = async (mealIndex) => {
+    if (!profile || !currentPlan) return;
+
+    const mealType =
+      currentPlan.plan[mealIndex].type ||
+      ["breakfast", "lunch", "dinner"][mealIndex];
+    const oldMeal = currentPlan.plan[mealIndex];
+
+    const newMeal = regenerateSingleMeal(
+      profile,
+      mealType,
+      oldMeal,
+      preppedComponents
+    );
+
+    if (!newMeal) {
+      console.error("Failed to generate a new meal.");
       return;
     }
 
-    const mealToSwap = currentPlan.plan[mealIndex];
-    const mealType =
-      mealToSwap.type || ["breakfast", "lunch", "dinner"][mealIndex];
-
-    const alternatives = await getMealAlternatives(
-      profile,
-      mealType,
-      mealToSwap
-    );
-
-    if (alternatives && alternatives.length > 0) {
-      setMealAlternatives(alternatives);
-      setSwapMealIndex(mealIndex);
-      setIsSwapDialogOpen(true);
-    } else {
-      console.warn("No alternatives found to swap.");
-      // Aici poți adăuga un toast.error("Could not find alternatives.")
-    }
-  };
-
-  // --- NOU: Funcția care se execută la selectarea unei mese noi ---
-  const handleSelectNewMeal = async (newMeal) => {
-    if (swapMealIndex === null) return;
-
     const newMealsArray = currentPlan.plan.map((meal, index) =>
-      index === swapMealIndex ? newMeal : meal
+      index === mealIndex ? newMeal : meal
     );
 
     const newTotals = newMealsArray.reduce(
@@ -287,21 +286,16 @@ export default function DashboardPage() {
 
     setCurrentPlan(newPlanState);
     const dateString = getFormattedDate(currentDate);
-    setWeeklyPlans((prev) => new Map(prev).set(dateString, newPlanState));
-
     await savePlan(profile.id, dateString, newPlanState);
-
-    setIsSwapDialogOpen(false);
-    setMealAlternatives([]);
-    setSwapMealIndex(null);
+    setWeeklyPlans((prev) => new Map(prev).set(dateString, newPlanState));
   };
 
-  // ... (păstrează funcțiile: changeWeek, handleDaySelect, handleLogout)
   const changeWeek = (offset) => {
     const newStartOfWeek = addDays(startOfWeek, offset * 7);
     setStartOfWeek(newStartOfWeek);
     handleDaySelect(newStartOfWeek);
   };
+
   const handleDaySelect = (date) => {
     setCurrentDate(date);
     const dateString = getFormattedDate(date);
@@ -311,6 +305,7 @@ export default function DashboardPage() {
       setCurrentPlan(null);
     }
   };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push("/");
@@ -321,15 +316,6 @@ export default function DashboardPage() {
 
   return (
     <div className="w-full max-w-4xl mx-auto p-4">
-      {/* --- NOU: Adăugăm componenta Dialog aici, la nivel înalt --- */}
-      <SwapMealDialog
-        isOpen={isSwapDialogOpen}
-        onOpenChange={setIsSwapDialogOpen}
-        alternatives={mealAlternatives}
-        onSelectMeal={handleSelectNewMeal}
-      />
-
-      {/* ... (păstrează header-ul, secțiunea de shopping list, etc.) */}
       <header className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold">
@@ -338,7 +324,6 @@ export default function DashboardPage() {
           <p className="text-slate-500">Your meal plan dashboard.</p>
         </div>
         <div className="flex items-center gap-2">
-          {/* --- NOU: Butonul Prep Mode --- */}
           <Button variant="outline" asChild>
             <Link href="/prep-mode">
               <ChefHat className="mr-2 h-4 w-4" />
@@ -404,7 +389,21 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* ... (păstrează Card-ul de Weekly Overview) */}
+      {/* Prep Mode Status Banner */}
+      {preppedComponents && (
+        <Card className="mb-6 border-green-500 bg-green-50 dark:bg-green-900/20">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-green-600" />
+              <p className="text-green-700 dark:text-green-400 font-medium">
+                Prep Mode Active! Your meals are using prepped components with
+                optimized instructions.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="w-full mb-8">
         <CardHeader>
           <div className="flex justify-between items-center">
@@ -483,7 +482,6 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
-          {/* ... (păstrează Card-ul "Day's Targets vs. Plan") */}
           <Card className="w-full mb-8">
             <CardHeader>
               <CardTitle>Day's Targets vs. Plan</CardTitle>
@@ -554,6 +552,12 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-4">
                       <UtensilsCrossed className="h-5 w-5 text-slate-500" />
                       {meal.name}
+                      {meal.isPrepMode && (
+                        <Badge variant="secondary" className="ml-2">
+                          <Sparkles className="h-3 w-3 mr-1" />
+                          Prep Mode
+                        </Badge>
+                      )}
                     </div>
                     <div className="text-sm text-slate-400">
                       {meal.total_calories} kcal
@@ -600,28 +604,89 @@ export default function DashboardPage() {
                       <h4 className="font-semibold mb-2 flex items-center gap-2">
                         <ShoppingCart className="h-4 w-4" /> Ingredients
                       </h4>
-                      <ul className="space-y-2">
-                        {meal.ingredients &&
-                          meal.ingredients.map((ing, i) => (
-                            <li
-                              key={i}
-                              className="flex justify-between items-center p-2 rounded-md bg-slate-50 dark:bg-slate-800/50"
-                            >
-                              <div className="flex items-center gap-2">
-                                <CheckCircle className="h-4 w-4 text-green-500" />
-                                <span>{ing.name}</span>
-                              </div>
-                              <span className="font-mono text-slate-500">
-                                {ing.amount}
-                                {ing.unit}
-                              </span>
-                            </li>
-                          ))}
-                      </ul>
+
+                      {/* Afișăm ingredientele separate dacă suntem în prep mode */}
+                      {meal.isPrepMode && meal.categorizedIngredients ? (
+                        <>
+                          {meal.categorizedIngredients.prepped.length > 0 && (
+                            <div className="mb-4">
+                              <p className="text-xs text-green-600 font-medium mb-2 flex items-center gap-1">
+                                <CheckCircle className="h-3 w-3" />
+                                Prepped Components (from fridge)
+                              </p>
+                              <ul className="space-y-2">
+                                {meal.categorizedIngredients.prepped.map(
+                                  (ing, i) => (
+                                    <li
+                                      key={i}
+                                      className="flex justify-between items-center p-2 rounded-md bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800"
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <CheckCircle className="h-4 w-4 text-green-500" />
+                                        <span>{ing.name}</span>
+                                      </div>
+                                      <span className="font-mono text-slate-500">
+                                        {ing.amount}
+                                        {ing.unit}
+                                      </span>
+                                    </li>
+                                  )
+                                )}
+                              </ul>
+                            </div>
+                          )}
+
+                          {meal.categorizedIngredients.fresh.length > 0 && (
+                            <div>
+                              <p className="text-xs text-blue-600 font-medium mb-2">
+                                Fresh Ingredients
+                              </p>
+                              <ul className="space-y-2">
+                                {meal.categorizedIngredients.fresh.map(
+                                  (ing, i) => (
+                                    <li
+                                      key={i}
+                                      className="flex justify-between items-center p-2 rounded-md bg-slate-50 dark:bg-slate-800/50"
+                                    >
+                                      <span>{ing.name}</span>
+                                      <span className="font-mono text-slate-500">
+                                        {ing.amount}
+                                        {ing.unit}
+                                      </span>
+                                    </li>
+                                  )
+                                )}
+                              </ul>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <ul className="space-y-2">
+                          {meal.ingredients &&
+                            meal.ingredients.map((ing, i) => (
+                              <li
+                                key={i}
+                                className="flex justify-between items-center p-2 rounded-md bg-slate-50 dark:bg-slate-800/50"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <CheckCircle className="h-4 w-4 text-green-500" />
+                                  <span>{ing.name}</span>
+                                </div>
+                                <span className="font-mono text-slate-500">
+                                  {ing.amount}
+                                  {ing.unit}
+                                </span>
+                              </li>
+                            ))}
+                        </ul>
+                      )}
                     </div>
                     <div>
                       <h4 className="font-semibold mb-2 flex items-center gap-2">
-                        <BookOpen className="h-4 w-4" /> Instructions
+                        <BookOpen className="h-4 w-4" />
+                        {meal.isPrepMode
+                          ? "Quick Assembly Instructions"
+                          : "Instructions"}
                       </h4>
                       {meal.instructions && meal.instructions.length > 0 ? (
                         <ol className="list-decimal list-inside space-y-2 text-slate-600 dark:text-slate-300">
@@ -636,16 +701,14 @@ export default function DashboardPage() {
                       )}
                     </div>
                   </div>
-                  {/* --- MODIFICAT: Butonul de la final --- */}
                   <div className="px-4 pb-2 flex justify-end">
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleOpenSwapDialog(index)}
-                      disabled={!currentPlan}
+                      onClick={() => handleRegenerateSingleMeal(index)}
                     >
-                      <Replace className="mr-2 h-4 w-4" />
-                      Swap this Meal
+                      <RefreshCw className="mr-2 h-3 w-3" />
+                      Regenerate this meal
                     </Button>
                   </div>
                 </AccordionContent>

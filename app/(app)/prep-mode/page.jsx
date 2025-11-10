@@ -13,8 +13,10 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Utensils, ClipboardList, ChefHat } from "lucide-react";
+import { Utensils, ClipboardList, ChefHat, CheckCircle2 } from "lucide-react";
+import { toast } from "sonner";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 const LoadingSpinner = () => (
   <div className="flex items-center justify-center h-screen">
@@ -23,10 +25,14 @@ const LoadingSpinner = () => (
 );
 
 export default function PrepModePage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [prepComponents, setPrepComponents] = useState([]);
   const [prepSteps, setPrepSteps] = useState([]);
-  const [daysToPrep, setDaysToPrep] = useState(3); // Default: prep for next 3 days
+  const [daysToPrep, setDaysToPrep] = useState(3);
+  const [userId, setUserId] = useState(null);
+  const [currentPrepStatus, setCurrentPrepStatus] = useState(null);
 
   useEffect(() => {
     const fetchAndGeneratePrepPlan = async () => {
@@ -36,10 +42,24 @@ export default function PrepModePage() {
       } = await supabase.auth.getUser();
       if (!user) {
         setLoading(false);
+        router.push("/login");
         return;
       }
 
-      // 1. Fetch plans for the selected number of days
+      setUserId(user.id);
+
+      // Verificăm statusul de prep curent
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("prep_status")
+        .eq("id", user.id)
+        .single();
+
+      if (profile?.prep_status) {
+        setCurrentPrepStatus(profile.prep_status);
+      }
+
+      // Fetch plans for the selected number of days
       const dateStrings = Array.from({ length: daysToPrep }, (_, i) => {
         const d = new Date();
         d.setDate(d.getDate() + i);
@@ -54,11 +74,12 @@ export default function PrepModePage() {
 
       if (error) {
         console.error("Error fetching plans for prep mode:", error);
+        toast.error("Could not load meal plans.");
         setLoading(false);
         return;
       }
 
-      // 2. Generate the prep list and steps using our engine
+      // Generate the prep list and steps
       const components = generatePrepList(dailyPlans);
       const steps = generatePrepSteps(components);
 
@@ -68,7 +89,83 @@ export default function PrepModePage() {
     };
 
     fetchAndGeneratePrepPlan();
-  }, [daysToPrep]); // Recalculează dacă utilizatorul schimbă numărul de zile
+  }, [daysToPrep, router]);
+
+  const handleMarkAsPrepped = async () => {
+    if (!userId || prepComponents.length === 0) {
+      toast.error("No components to mark as prepped.");
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      // Calculăm data de expirare (peste 5 zile de la prep)
+      const expiryDate = new Date();
+      expiryDate.setDate(expiryDate.getDate() + 5);
+
+      const prepStatus = {
+        components: prepComponents,
+        preppedAt: new Date().toISOString(),
+        expiresAt: expiryDate.toISOString(),
+        daysPrepped: daysToPrep,
+      };
+
+      // Salvăm în profil
+      const { error } = await supabase
+        .from("profiles")
+        .update({ prep_status: prepStatus })
+        .eq("id", userId);
+
+      if (error) {
+        throw error;
+      }
+
+      setCurrentPrepStatus(prepStatus);
+      toast.success(
+        "Great! Your prepped components have been saved. Check your dashboard for updated instructions!"
+      );
+
+      // Redirect to dashboard after 1.5 seconds
+      setTimeout(() => {
+        router.push("/dashboard");
+      }, 1500);
+    } catch (error) {
+      console.error("Error saving prep status:", error);
+      toast.error("Could not save prep status. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleClearPrepStatus = async () => {
+    if (!userId) return;
+
+    setSaving(true);
+
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ prep_status: null })
+        .eq("id", userId);
+
+      if (error) {
+        throw error;
+      }
+
+      setCurrentPrepStatus(null);
+      toast.success("Prep status cleared! Redirecting to dashboard...");
+
+      // Redirect to dashboard after clearing
+      setTimeout(() => {
+        router.push("/dashboard?refresh=true");
+      }, 1000);
+    } catch (error) {
+      console.error("Error clearing prep status:", error);
+      toast.error("Could not clear prep status.");
+      setSaving(false);
+    }
+  };
 
   if (loading) {
     return <LoadingSpinner />;
@@ -90,6 +187,36 @@ export default function PrepModePage() {
           <Link href="/dashboard">Back to Dashboard</Link>
         </Button>
       </header>
+
+      {/* Status banner */}
+      {currentPrepStatus && (
+        <Card className="mb-6 border-green-500 bg-green-50 dark:bg-green-900/20">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                <CardTitle className="text-green-700 dark:text-green-400">
+                  Components Already Prepped
+                </CardTitle>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleClearPrepStatus}
+                disabled={saving}
+              >
+                Clear Prep Status
+              </Button>
+            </div>
+            <CardDescription>
+              Prepped on:{" "}
+              {new Date(currentPrepStatus.preppedAt).toLocaleDateString()} |
+              Expires:{" "}
+              {new Date(currentPrepStatus.expiresAt).toLocaleDateString()}
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
 
       <Card className="mb-8">
         <CardHeader>
@@ -194,6 +321,30 @@ export default function PrepModePage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Action Button */}
+      {prepComponents.length > 0 && (
+        <div className="mt-8 flex justify-center">
+          <Button
+            size="lg"
+            onClick={handleMarkAsPrepped}
+            disabled={saving}
+            className="w-full md:w-auto"
+          >
+            {saving ? (
+              <>
+                <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="mr-2 h-5 w-5" />
+                I've Prepped Everything!
+              </>
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
