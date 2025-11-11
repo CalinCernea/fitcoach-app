@@ -1,7 +1,7 @@
 // app/(app)/dashboard/page.jsx
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/utils/supabase";
@@ -93,9 +93,26 @@ const LoadingSpinner = () => (
   </div>
 );
 
+// Componentă separată pentru logica de refresh
+function RefreshHandler({ profile, isRegenerating, onRegenerateAll }) {
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const shouldRefresh = searchParams.get("refresh");
+    if (shouldRefresh === "true" && profile && !isRegenerating) {
+      console.log("🔄 Prep status changed, regenerating plans...");
+      onRegenerateAll();
+      // Curățăm parametrul din URL
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, "", newUrl);
+    }
+  }, [searchParams, profile, isRegenerating, onRegenerateAll]);
+
+  return null;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [profile, setProfile] = useState(null);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [currentPlan, setCurrentPlan] = useState(null);
@@ -185,18 +202,6 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchProfileAndPlans();
   }, [fetchProfileAndPlans]);
-
-  // Detectăm când se schimbă prep status și regenerăm planurile automat
-  useEffect(() => {
-    const shouldRefresh = searchParams.get("refresh");
-    if (shouldRefresh === "true" && profile && !isRegenerating) {
-      console.log("🔄 Prep status changed, regenerating plans...");
-      regenerateAllPlans();
-      // Curățăm parametrul din URL
-      const newUrl = window.location.pathname;
-      window.history.replaceState({}, "", newUrl);
-    }
-  }, [searchParams, profile, isRegenerating]);
 
   useEffect(() => {
     if (weeklyPlans.size > 0) {
@@ -449,6 +454,15 @@ export default function DashboardPage() {
 
   return (
     <div className="w-full max-w-4xl mx-auto p-4">
+      {/* Suspense boundary pentru useSearchParams */}
+      <Suspense fallback={null}>
+        <RefreshHandler
+          profile={profile}
+          isRegenerating={isRegenerating}
+          onRegenerateAll={regenerateAllPlans}
+        />
+      </Suspense>
+
       <header className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold">
