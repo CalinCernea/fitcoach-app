@@ -4,12 +4,14 @@
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
-import { Card, CardContent } from "@/components/ui/card";
-import { UtensilsCrossed } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Sparkles, Beef, Wheat, Droplets } from "lucide-react";
 
 export function SwapMealDialog({
   isOpen,
@@ -23,51 +25,83 @@ export function SwapMealDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[800px] bg-white dark:bg-slate-900">
+      <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl">Choose an Alternative</DialogTitle>
+          <DialogTitle>Choose an Alternative Meal</DialogTitle>
           <DialogDescription>
-            Select a meal below to swap it into your plan. Calorie and macro
-            counts are similar.
+            Select a meal to replace the current one. All alternatives match
+            your preferences and dietary requirements.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 py-4">
+
+        <div className="grid gap-4 mt-4">
           {alternatives.map((meal, index) => (
             <Card
-              key={`${meal.id}-${index}`}
-              className="cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-blue-500 dark:hover:border-blue-500"
-              onClick={() => {
-                onSelectMeal(meal);
-                onOpenChange(false);
-              }}
+              key={index}
+              className="p-4 cursor-pointer hover:border-blue-500 transition-colors"
+              onClick={() => onSelectMeal(meal)}
             >
-              <CardContent className="p-4">
-                <div className="relative h-32 w-full mb-3 rounded-md overflow-hidden">
-                  {meal.imageUrl ? (
-                    <img
-                      src={meal.imageUrl}
-                      alt={meal.name}
-                      className="absolute h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full bg-slate-100 dark:bg-slate-800">
-                      <UtensilsCrossed className="h-8 w-8 text-slate-400" />
+              <div className="flex gap-4">
+                {meal.imageUrl && (
+                  <img
+                    src={meal.imageUrl}
+                    alt={meal.name}
+                    className="w-24 h-24 object-cover rounded-md"
+                  />
+                )}
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="font-semibold text-lg">{meal.name}</h3>
+                    {meal.isPrepMode && (
+                      <Badge variant="secondary">
+                        <Sparkles className="h-3 w-3 mr-1" />
+                        Prep Mode
+                      </Badge>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-2 text-sm">
+                    <div>
+                      <span className="text-slate-500">Calories:</span>
+                      <p className="font-medium">
+                        {Math.round(meal.total_calories)}
+                      </p>
                     </div>
-                  )}
+                    <div className="flex items-center gap-1">
+                      <Beef className="h-3 w-3 text-red-500" />
+                      <span className="text-slate-500">Protein:</span>
+                      <p className="font-medium">
+                        {Math.round(meal.total_protein)}g
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Wheat className="h-3 w-3 text-yellow-500" />
+                      <span className="text-slate-500">Carbs:</span>
+                      <p className="font-medium">
+                        {Math.round(meal.total_carbs)}g
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Droplets className="h-3 w-3 text-blue-500" />
+                      <span className="text-slate-500">Fats:</span>
+                      <p className="font-medium">
+                        {Math.round(meal.total_fats)}g
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-2">
+                    <p className="text-xs text-slate-600">
+                      {meal.ingredients
+                        ?.slice(0, 3)
+                        .map((ing) => ing.name)
+                        .join(", ")}
+                      {meal.ingredients?.length > 3 &&
+                        ` +${meal.ingredients.length - 3} more`}
+                    </p>
+                  </div>
                 </div>
-                <h3 className="font-semibold text-md mb-1">{meal.name}</h3>
-                <p className="text-sm text-blue-500 font-bold">
-                  {meal.total_calories} kcal
-                </p>
-                {/* --- AICI ESTE CORECȚIA --- */}
-                <div className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-                  <span className="font-medium">P:</span> {meal.total_protein}g
-                  &bull; <span className="font-medium">C:</span>{" "}
-                  {meal.total_carbs}g &bull;{" "}
-                  <span className="font-medium">F:</span> {meal.total_fats}g
-                </div>
-                {/* Am schimbat </p> în </div> */}
-              </CardContent>
+              </div>
             </Card>
           ))}
         </div>

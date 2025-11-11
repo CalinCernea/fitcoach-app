@@ -33,6 +33,7 @@ export default function PrepModePage() {
   const [daysToPrep, setDaysToPrep] = useState(3);
   const [userId, setUserId] = useState(null);
   const [currentPrepStatus, setCurrentPrepStatus] = useState(null);
+  const [completedSteps, setCompletedSteps] = useState(new Set());
 
   useEffect(() => {
     const fetchAndGeneratePrepPlan = async () => {
@@ -85,6 +86,7 @@ export default function PrepModePage() {
 
       setPrepComponents(components);
       setPrepSteps(steps);
+      setCompletedSteps(new Set()); // Reset checkbox-urile când se schimbă perioada
       setLoading(false);
     };
 
@@ -100,15 +102,15 @@ export default function PrepModePage() {
     setSaving(true);
 
     try {
-      // Calculăm data de expirare (peste 5 zile de la prep)
+      // MODIFICAT: Calculăm data de expirare pe baza numărului de zile selectat
       const expiryDate = new Date();
-      expiryDate.setDate(expiryDate.getDate() + 5);
+      expiryDate.setDate(expiryDate.getDate() + daysToPrep);
 
       const prepStatus = {
         components: prepComponents,
         preppedAt: new Date().toISOString(),
         expiresAt: expiryDate.toISOString(),
-        daysPrepped: daysToPrep,
+        daysPrepped: daysToPrep, // Numărul de zile pentru care sunt valabile componentele
       };
 
       // Salvăm în profil
@@ -123,12 +125,12 @@ export default function PrepModePage() {
 
       setCurrentPrepStatus(prepStatus);
       toast.success(
-        "Great! Your prepped components have been saved. Check your dashboard for updated instructions!"
+        `Great! Prep mode activated for the next ${daysToPrep} days. Your meal plans are being updated...`
       );
 
-      // Redirect to dashboard after 1.5 seconds
+      // Redirect cu parametrul refresh pentru a regenera planurile
       setTimeout(() => {
-        router.push("/dashboard");
+        router.push("/dashboard?refresh=true");
       }, 1500);
     } catch (error) {
       console.error("Error saving prep status:", error);
@@ -166,6 +168,21 @@ export default function PrepModePage() {
       setSaving(false);
     }
   };
+
+  const handleStepToggle = (stepId) => {
+    setCompletedSteps((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(stepId)) {
+        newSet.delete(stepId);
+      } else {
+        newSet.add(stepId);
+      }
+      return newSet;
+    });
+  };
+
+  const allStepsCompleted =
+    prepSteps.length > 0 && completedSteps.size === prepSteps.length;
 
   if (loading) {
     return <LoadingSpinner />;
@@ -301,20 +318,41 @@ export default function PrepModePage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {prepSteps.length > 0 ? (
-              prepSteps.map((step, index) => (
-                <div
-                  key={step.id}
-                  className="flex items-center gap-3 p-2 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800/50"
-                >
-                  <Checkbox id={`step-${index}`} />
-                  <label
-                    htmlFor={`step-${index}`}
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    {step.text}
-                  </label>
+              <>
+                <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md">
+                  <p className="text-sm text-blue-700 dark:text-blue-400 font-medium">
+                    ✓ {completedSteps.size} of {prepSteps.length} steps
+                    completed
+                  </p>
+                  {!allStepsCompleted && (
+                    <p className="text-xs text-blue-600 dark:text-blue-500 mt-1">
+                      Complete all steps to activate prep mode
+                    </p>
+                  )}
                 </div>
-              ))
+                {prepSteps.map((step, index) => (
+                  <div
+                    key={step.id}
+                    className="flex items-center gap-3 p-2 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                  >
+                    <Checkbox
+                      id={`step-${index}`}
+                      checked={completedSteps.has(step.id)}
+                      onCheckedChange={() => handleStepToggle(step.id)}
+                    />
+                    <label
+                      htmlFor={`step-${index}`}
+                      className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer ${
+                        completedSteps.has(step.id)
+                          ? "line-through text-slate-500"
+                          : ""
+                      }`}
+                    >
+                      {step.text}
+                    </label>
+                  </div>
+                ))}
+              </>
             ) : (
               <p className="text-slate-500">No steps to show.</p>
             )}
@@ -324,11 +362,18 @@ export default function PrepModePage() {
 
       {/* Action Button */}
       {prepComponents.length > 0 && (
-        <div className="mt-8 flex justify-center">
+        <div className="mt-8 flex flex-col items-center gap-4">
+          {!allStepsCompleted && (
+            <div className="text-center">
+              <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
+                📋 Complete all prep steps above to activate prep mode
+              </p>
+            </div>
+          )}
           <Button
             size="lg"
             onClick={handleMarkAsPrepped}
-            disabled={saving}
+            disabled={saving || !allStepsCompleted}
             className="w-full md:w-auto"
           >
             {saving ? (
@@ -343,6 +388,13 @@ export default function PrepModePage() {
               </>
             )}
           </Button>
+          {!allStepsCompleted && (
+            <p className="text-xs text-slate-500">
+              {prepSteps.length - completedSteps.size} step
+              {prepSteps.length - completedSteps.size !== 1 ? "s" : ""}{" "}
+              remaining
+            </p>
+          )}
         </div>
       )}
     </div>

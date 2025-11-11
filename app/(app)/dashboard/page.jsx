@@ -2,12 +2,12 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation"; // Am eliminat useSearchParams, nu era folosit
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/utils/supabase";
 import {
   generateAdvancedMealPlan,
-  // regenerateSingleMeal, // Am eliminat funcția nefolosită
+  regenerateSingleMeal,
   getMealAlternatives,
 } from "@/utils/advancedMealPlanner";
 
@@ -50,10 +50,8 @@ import {
   BookOpen,
   ChefHat,
   Sparkles,
-  Replace, // MODIFICARE: Adăugăm iconița pentru Swap
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { SwapMealDialog } from "@/components/SwapMealDialog"; // MODIFICARE: Importăm dialogul
 
 // Helper Functions
 const getFormattedDate = (date) => date.toISOString().split("T")[0];
@@ -97,6 +95,7 @@ const LoadingSpinner = () => (
 
 export default function DashboardPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [profile, setProfile] = useState(null);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [currentPlan, setCurrentPlan] = useState(null);
@@ -107,11 +106,7 @@ export default function DashboardPage() {
   const [shoppingList, setShoppingList] = useState({});
   const [shoppingListPeriod, setShoppingListPeriod] = useState(7);
   const [preppedComponents, setPreppedComponents] = useState(null);
-
-  // MODIFICARE: Adăugăm stările pentru dialogul de Swap
-  const [isSwapDialogOpen, setIsSwapDialogOpen] = useState(false);
-  const [mealAlternatives, setMealAlternatives] = useState([]);
-  const [swapMealIndex, setSwapMealIndex] = useState(null);
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
   const fetchPlansForWeek = useCallback(async (userId, weekStartDate) => {
     const datesToFetch = Array.from({ length: 7 }, (_, i) =>
@@ -153,12 +148,15 @@ export default function DashboardPage() {
     }
     setProfile(userProfile);
 
+    // Verificăm dacă există prep_status și dacă nu a expirat
     if (userProfile.prep_status) {
       const expiryDate = new Date(userProfile.prep_status.expiresAt);
       const now = new Date();
+
       if (expiryDate > now) {
         setPreppedComponents(userProfile.prep_status.components);
       } else {
+        // A expirat - ștergem statusul
         await supabase
           .from("profiles")
           .update({ prep_status: null })
@@ -187,6 +185,18 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchProfileAndPlans();
   }, [fetchProfileAndPlans]);
+
+  // Detectăm când se schimbă prep status și regenerăm planurile automat
+  useEffect(() => {
+    const shouldRefresh = searchParams.get("refresh");
+    if (shouldRefresh === "true" && profile && !isRegenerating) {
+      console.log("🔄 Prep status changed, regenerating plans...");
+      regenerateAllPlans();
+      // Curățăm parametrul din URL
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, "", newUrl);
+    }
+  }, [searchParams, profile, isRegenerating]);
 
   useEffect(() => {
     if (weeklyPlans.size > 0) {
@@ -248,35 +258,134 @@ export default function DashboardPage() {
     setLoading(false);
   };
 
-  // MODIFICARE: Adăugăm funcțiile pentru Swap
-  const handleOpenSwapDialog = async (mealIndex) => {
-    if (!profile || !currentPlan || !currentPlan.plan) {
+  const regenerateAllPlans = async () => {
+    if (!profile || isRegenerating) return;
+
+    setIsRegenerating(true);
+    console.log("🔄 Regenerating all plans with updated prep status...");
+
+    // Re-fetch profilul pentru a obține prep_status actualizat
+    const { data: updatedProfile } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", profile.id)
+      .single();
+
+    if (!updatedProfile) {
+      setIsRegenerating(false);
       return;
     }
-    const mealToSwap = currentPlan.plan[mealIndex];
+
+    // Verificăm prep status și data de expirare
+    let newPreppedComponents = null;
+    let prepStartDate = null;
+    let prepDays = 0;
+
+    if (updatedProfile.prep_status) {
+      const expiryDate = new Date(updatedProfile.prep_status.expiresAt);
+      const now = new Date();
+      if (expiryDate > now) {
+        newPreppedComponents = updatedProfile.prep_status.components;
+        prepStartDate = new Date(updatedProfile.prep_status.preppedAt);
+        prepDays = updatedProfile.prep_status.daysPrepped || 0;
+      }
+    }
+    setPreppedComponents(newPreppedComponents);
+
+    // Regenerăm planurile pentru următoarele 14 zile (să acopere toate cazurile)
+    const datesToRegenerate = Array.from({ length: 14 }, (_, i) =>
+      addDays(new Date(), i)
+    );
+
+    const regeneratedPlans = [];
+
+    for (let i = 0; i < datesToRegenerate.length; i++) {
+      const date = datesToRegenerate[i];
+      const dateString = getFormattedDate(date);
+
+      // Verificăm dacă această zi este în perioada de prep
+      let componentsForThisDay = null;
+      if (newPreppedComponents && prepStartDate) {
+        const daysSincePrep = Math.floor(
+          (date - prepStartDate) / (1000 * 60 * 60 * 24)
+        );
+        // Dacă ziua este în primele X zile de la prep, folosim componentele pregătite
+        if (daysSincePrep >= 0 && daysSincePrep < prepDays) {
+          componentsForThisDay = newPreppedComponents;
+          console.log(
+            `✅ Day ${i} (${dateString}) - Using prep mode (day ${
+              daysSincePrep + 1
+            }/${prepDays})`
+          );
+        } else {
+          console.log(
+            `⏭️ Day ${i} (${dateString}) - Normal mode (outside prep window)`
+          );
+        }
+      }
+
+      const newPlan = generateAdvancedMealPlan(
+        updatedProfile,
+        componentsForThisDay
+      );
+      if (newPlan) {
+        regeneratedPlans.push({
+          user_id: profile.id,
+          plan_date: dateString,
+          plan_data: newPlan,
+        });
+      }
+    }
+
+    if (regeneratedPlans.length > 0) {
+      const { error } = await supabase
+        .from("daily_meal_plans")
+        .upsert(regeneratedPlans, { onConflict: "user_id, plan_date" });
+
+      if (error) {
+        console.error("Error regenerating plans:", error);
+      } else {
+        console.log("✅ All plans regenerated successfully");
+
+        // Reîncărcăm planurile săptămânale
+        await fetchPlansForWeek(profile.id, startOfWeek);
+
+        // Actualizăm planul curent
+        const todayString = getFormattedDate(currentDate);
+        const todayPlan = regeneratedPlans.find(
+          (p) => p.plan_date === todayString
+        );
+        if (todayPlan) {
+          setCurrentPlan(todayPlan.plan_data);
+        }
+      }
+    }
+
+    setIsRegenerating(false);
+  };
+
+  const handleRegenerateSingleMeal = async (mealIndex) => {
+    if (!profile || !currentPlan) return;
+
     const mealType =
-      mealToSwap.type || ["breakfast", "lunch", "dinner"][mealIndex];
-    const alternatives = getMealAlternatives(
+      currentPlan.plan[mealIndex].type ||
+      ["breakfast", "lunch", "dinner"][mealIndex];
+    const oldMeal = currentPlan.plan[mealIndex];
+
+    const newMeal = regenerateSingleMeal(
       profile,
       mealType,
-      mealToSwap,
+      oldMeal,
       preppedComponents
     );
 
-    if (alternatives && alternatives.length > 0) {
-      setMealAlternatives(alternatives);
-      setSwapMealIndex(mealIndex);
-      setIsSwapDialogOpen(true);
-    } else {
-      console.warn("No alternatives found to swap.");
+    if (!newMeal) {
+      console.error("Failed to generate a new meal.");
+      return;
     }
-  };
-
-  const handleSelectNewMeal = async (newMeal) => {
-    if (swapMealIndex === null) return;
 
     const newMealsArray = currentPlan.plan.map((meal, index) =>
-      index === swapMealIndex ? newMeal : meal
+      index === mealIndex ? newMeal : meal
     );
 
     const newTotals = newMealsArray.reduce(
@@ -299,10 +408,6 @@ export default function DashboardPage() {
     const dateString = getFormattedDate(currentDate);
     await savePlan(profile.id, dateString, newPlanState);
     setWeeklyPlans((prev) => new Map(prev).set(dateString, newPlanState));
-
-    setIsSwapDialogOpen(false);
-    setMealAlternatives([]);
-    setSwapMealIndex(null);
   };
 
   const changeWeek = (offset) => {
@@ -329,16 +434,21 @@ export default function DashboardPage() {
   if (!profile) return <LoadingSpinner />;
   if (error) return <div className="text-red-500 text-center">{error}</div>;
 
+  // Afișăm loading când regenerăm planurile
+  if (isRegenerating) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen gap-4">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div>
+        <p className="text-lg font-medium text-slate-600">
+          Updating meal plans with{" "}
+          {preppedComponents ? "prep mode" : "fresh ingredients"}...
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full max-w-4xl mx-auto p-4">
-      {/* MODIFICARE: Adăugăm componenta Dialog aici */}
-      <SwapMealDialog
-        isOpen={isSwapDialogOpen}
-        onOpenChange={setIsSwapDialogOpen}
-        alternatives={mealAlternatives}
-        onSelectMeal={handleSelectNewMeal}
-      />
-
       <header className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold">
@@ -412,6 +522,7 @@ export default function DashboardPage() {
         </div>
       </header>
 
+      {/* Prep Mode Status Banner */}
       {preppedComponents && (
         <Card className="mb-6 border-green-500 bg-green-50 dark:bg-green-900/20">
           <CardContent className="pt-6">
@@ -627,6 +738,7 @@ export default function DashboardPage() {
                         <ShoppingCart className="h-4 w-4" /> Ingredients
                       </h4>
 
+                      {/* Afișăm ingredientele separate dacă suntem în prep mode */}
                       {meal.isPrepMode && meal.categorizedIngredients ? (
                         <>
                           {meal.categorizedIngredients.prepped.length > 0 && (
@@ -722,15 +834,14 @@ export default function DashboardPage() {
                       )}
                     </div>
                   </div>
-                  {/* MODIFICARE: Înlocuim butonul de Regenerate cu Swap */}
                   <div className="px-4 pb-2 flex justify-end">
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleOpenSwapDialog(index)}
+                      onClick={() => handleRegenerateSingleMeal(index)}
                     >
-                      <Replace className="mr-2 h-3 w-3" />
-                      Swap this meal
+                      <RefreshCw className="mr-2 h-3 w-3" />
+                      Regenerate this meal
                     </Button>
                   </div>
                 </AccordionContent>
