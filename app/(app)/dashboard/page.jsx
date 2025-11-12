@@ -7,7 +7,6 @@ import Link from "next/link";
 import { supabase } from "@/utils/supabase";
 import {
   generateAdvancedMealPlan,
-  regenerateSingleMeal,
   getMealAlternatives,
 } from "@/utils/advancedMealPlanner";
 
@@ -35,6 +34,14 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+// NOU: Am adăugat componentele pentru Dialog
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   LogOut,
   RefreshCw,
@@ -50,6 +57,10 @@ import {
   BookOpen,
   ChefHat,
   Sparkles,
+  Replace, // NOU: Iconiță nouă pentru butonul de swap
+  Coffee, // <-- ADAUGĂ AICI
+  Sun, // <-- ADAUGĂ AICI
+  Moon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -111,6 +122,20 @@ function RefreshHandler({ profile, isRegenerating, onRegenerateAll }) {
   return null;
 }
 
+const MealIcon = ({ mealType }) => {
+  const type = mealType?.toLowerCase();
+  if (type?.includes("breakfast")) {
+    return <Coffee className="h-5 w-5 text-amber-500" />;
+  }
+  if (type?.includes("lunch")) {
+    return <Sun className="h-5 w-5 text-orange-500" />;
+  }
+  if (type?.includes("dinner")) {
+    return <Moon className="h-5 w-5 text-indigo-500" />;
+  }
+  return <UtensilsCrossed className="h-5 w-5 text-slate-500" />;
+};
+
 export default function DashboardPage() {
   const router = useRouter();
   const [profile, setProfile] = useState(null);
@@ -124,6 +149,40 @@ export default function DashboardPage() {
   const [shoppingListPeriod, setShoppingListPeriod] = useState(7);
   const [preppedComponents, setPreppedComponents] = useState(null);
   const [isRegenerating, setIsRegenerating] = useState(false);
+
+  // NOU: Stări pentru dialogul de swap
+  const [isSwapDialogOpen, setIsSwapDialogOpen] = useState(false);
+  const [mealAlternatives, setMealAlternatives] = useState([]);
+  const [loadingAlternatives, setLoadingAlternatives] = useState(false);
+  const [activeMealIndex, setActiveMealIndex] = useState(null);
+
+  const getPrepStatusForDate = useCallback(
+    (date) => {
+      if (profile?.prep_status) {
+        const expiryDate = new Date(profile.prep_status.expiresAt);
+        const prepStartDate = new Date(profile.prep_status.preppedAt);
+        const prepDays = profile.prep_status.daysPrepped || 0;
+        const targetDate = new Date(date); // Asigură-te că e obiect Date
+
+        // Resetează orele pentru o comparație corectă a zilelor
+        prepStartDate.setHours(0, 0, 0, 0);
+        targetDate.setHours(0, 0, 0, 0);
+
+        if (expiryDate > new Date()) {
+          const daysSincePrep = Math.floor(
+            (targetDate - prepStartDate) / (1000 * 60 * 60 * 24)
+          );
+
+          // Verifică dacă data curentă este în intervalul de prep
+          if (daysSincePrep >= 0 && daysSincePrep < prepDays) {
+            return profile.prep_status.components; // Returnează componentele dacă e în prep mode
+          }
+        }
+      }
+      return null; // Nu este în prep mode pentru această dată
+    },
+    [profile]
+  );
 
   const fetchPlansForWeek = useCallback(async (userId, weekStartDate) => {
     const datesToFetch = Array.from({ length: 7 }, (_, i) =>
@@ -165,7 +224,6 @@ export default function DashboardPage() {
     }
     setProfile(userProfile);
 
-    // Verificăm dacă există prep_status și dacă nu a expirat
     if (userProfile.prep_status) {
       const expiryDate = new Date(userProfile.prep_status.expiresAt);
       const now = new Date();
@@ -173,7 +231,6 @@ export default function DashboardPage() {
       if (expiryDate > now) {
         setPreppedComponents(userProfile.prep_status.components);
       } else {
-        // A expirat - ștergem statusul
         await supabase
           .from("profiles")
           .update({ prep_status: null })
@@ -253,7 +310,18 @@ export default function DashboardPage() {
   const handleRegenerate = async () => {
     if (!profile) return;
     setLoading(true);
-    const newPlan = generateAdvancedMealPlan(profile, preppedComponents);
+
+    // Aflăm statusul de prep specific pentru ziua curentă
+    const componentsForThisDay = getPrepStatusForDate(currentDate); // << APELĂM FUNCȚIA HELPER
+
+    console.log(
+      `🔄 Regenerating day ${getFormattedDate(currentDate)}. Prep mode is ${
+        componentsForThisDay ? "ACTIVE" : "INACTIVE"
+      }.`
+    );
+
+    const newPlan = generateAdvancedMealPlan(profile, componentsForThisDay); // << TRIMITEM STATUSUL CORECT
+
     if (newPlan) {
       const dateString = getFormattedDate(currentDate);
       await savePlan(profile.id, dateString, newPlan);
@@ -269,7 +337,6 @@ export default function DashboardPage() {
     setIsRegenerating(true);
     console.log("🔄 Regenerating all plans with updated prep status...");
 
-    // Re-fetch profilul pentru a obține prep_status actualizat
     const { data: updatedProfile } = await supabase
       .from("profiles")
       .select("*")
@@ -281,7 +348,6 @@ export default function DashboardPage() {
       return;
     }
 
-    // Verificăm prep status și data de expirare
     let newPreppedComponents = null;
     let prepStartDate = null;
     let prepDays = 0;
@@ -297,7 +363,6 @@ export default function DashboardPage() {
     }
     setPreppedComponents(newPreppedComponents);
 
-    // Regenerăm planurile pentru următoarele 14 zile (să acopere toate cazurile)
     const datesToRegenerate = Array.from({ length: 14 }, (_, i) =>
       addDays(new Date(), i)
     );
@@ -308,24 +373,13 @@ export default function DashboardPage() {
       const date = datesToRegenerate[i];
       const dateString = getFormattedDate(date);
 
-      // Verificăm dacă această zi este în perioada de prep
       let componentsForThisDay = null;
       if (newPreppedComponents && prepStartDate) {
         const daysSincePrep = Math.floor(
           (date - prepStartDate) / (1000 * 60 * 60 * 24)
         );
-        // Dacă ziua este în primele X zile de la prep, folosim componentele pregătite
         if (daysSincePrep >= 0 && daysSincePrep < prepDays) {
           componentsForThisDay = newPreppedComponents;
-          console.log(
-            `✅ Day ${i} (${dateString}) - Using prep mode (day ${
-              daysSincePrep + 1
-            }/${prepDays})`
-          );
-        } else {
-          console.log(
-            `⏭️ Day ${i} (${dateString}) - Normal mode (outside prep window)`
-          );
         }
       }
 
@@ -351,11 +405,7 @@ export default function DashboardPage() {
         console.error("Error regenerating plans:", error);
       } else {
         console.log("✅ All plans regenerated successfully");
-
-        // Reîncărcăm planurile săptămânale
         await fetchPlansForWeek(profile.id, startOfWeek);
-
-        // Actualizăm planul curent
         const todayString = getFormattedDate(currentDate);
         const todayPlan = regeneratedPlans.find(
           (p) => p.plan_date === todayString
@@ -369,28 +419,45 @@ export default function DashboardPage() {
     setIsRegenerating(false);
   };
 
-  const handleRegenerateSingleMeal = async (mealIndex) => {
+  // NOU: Funcție pentru a deschide dialogul și a încărca alternativele
+  const handleOpenSwapDialog = async (mealIndex) => {
     if (!profile || !currentPlan) return;
 
-    const mealType =
-      currentPlan.plan[mealIndex].type ||
-      ["breakfast", "lunch", "dinner"][mealIndex];
-    const oldMeal = currentPlan.plan[mealIndex];
+    setActiveMealIndex(mealIndex);
+    setIsSwapDialogOpen(true);
+    setLoadingAlternatives(true);
+    setMealAlternatives([]);
 
-    const newMeal = regenerateSingleMeal(
-      profile,
-      mealType,
-      oldMeal,
-      preppedComponents
+    const mealToSwap = currentPlan.plan[mealIndex];
+    const mealType =
+      mealToSwap.type || ["breakfast", "lunch", "dinner"][mealIndex];
+
+    // Aflăm statusul de prep specific pentru ziua curentă
+    const componentsForThisDay = getPrepStatusForDate(currentDate); // << APELĂM FUNCȚIA HELPER
+
+    console.log(
+      `🔄 Swapping meal for ${getFormattedDate(currentDate)}. Prep mode is ${
+        componentsForThisDay ? "ACTIVE" : "INACTIVE"
+      }.`
     );
 
-    if (!newMeal) {
-      console.error("Failed to generate a new meal.");
-      return;
-    }
+    const alternatives = await getMealAlternatives(
+      profile,
+      mealType,
+      mealToSwap,
+      componentsForThisDay // << TRIMITEM STATUSUL CORECT PENTRU ZIUA CURENTĂ
+    );
+
+    setMealAlternatives(alternatives || []);
+    setLoadingAlternatives(false);
+  };
+
+  // NOU: Funcție pentru a înlocui masa cu o alternativă selectată
+  const handleSelectAlternative = async (selectedMeal) => {
+    if (activeMealIndex === null || !currentPlan) return;
 
     const newMealsArray = currentPlan.plan.map((meal, index) =>
-      index === mealIndex ? newMeal : meal
+      index === activeMealIndex ? selectedMeal : meal
     );
 
     const newTotals = newMealsArray.reduce(
@@ -413,6 +480,9 @@ export default function DashboardPage() {
     const dateString = getFormattedDate(currentDate);
     await savePlan(profile.id, dateString, newPlanState);
     setWeeklyPlans((prev) => new Map(prev).set(dateString, newPlanState));
+
+    setIsSwapDialogOpen(false);
+    setActiveMealIndex(null);
   };
 
   const changeWeek = (offset) => {
@@ -439,7 +509,6 @@ export default function DashboardPage() {
   if (!profile) return <LoadingSpinner />;
   if (error) return <div className="text-red-500 text-center">{error}</div>;
 
-  // Afișăm loading când regenerăm planurile
   if (isRegenerating) {
     return (
       <div className="flex flex-col items-center justify-center h-screen gap-4">
@@ -454,7 +523,6 @@ export default function DashboardPage() {
 
   return (
     <div className="w-full max-w-4xl mx-auto p-4">
-      {/* Suspense boundary pentru useSearchParams */}
       <Suspense fallback={null}>
         <RefreshHandler
           profile={profile}
@@ -536,7 +604,6 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* Prep Mode Status Banner */}
       {preppedComponents && (
         <Card className="mb-6 border-green-500 bg-green-50 dark:bg-green-900/20">
           <CardContent className="pt-6">
@@ -694,20 +761,25 @@ export default function DashboardPage() {
                 value={`item-${index}`}
                 key={`${index}-${meal.id}-${meal.total_calories}`}
               >
-                <AccordionTrigger className="text-lg font-medium">
-                  <div className="flex justify-between w-full pr-4">
+                {/* MODIFICAT: AccordionTrigger cu design premium */}
+                <AccordionTrigger className="text-lg font-medium hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg px-4">
+                  <div className="flex justify-between w-full items-center">
                     <div className="flex items-center gap-4">
-                      <UtensilsCrossed className="h-5 w-5 text-slate-500" />
-                      {meal.name}
+                      <MealIcon mealType={meal.type} />
+                      <span className="text-left">{meal.name}</span>
                       {meal.isPrepMode && (
-                        <Badge variant="secondary" className="ml-2">
+                        <Badge
+                          variant="outline"
+                          className="border-green-500 text-green-600"
+                        >
                           <Sparkles className="h-3 w-3 mr-1" />
-                          Prep Mode
+                          Prep
                         </Badge>
                       )}
                     </div>
-                    <div className="text-sm text-slate-400">
-                      {meal.total_calories} kcal
+                    <div className="text-right text-sm font-semibold text-slate-600 dark:text-slate-300 pr-2">
+                      {Math.round(meal.total_calories)}
+                      <span className="text-xs text-slate-400 ml-1">kcal</span>
                     </div>
                   </div>
                 </AccordionTrigger>
@@ -752,7 +824,6 @@ export default function DashboardPage() {
                         <ShoppingCart className="h-4 w-4" /> Ingredients
                       </h4>
 
-                      {/* Afișăm ingredientele separate dacă suntem în prep mode */}
                       {meal.isPrepMode && meal.categorizedIngredients ? (
                         <>
                           {meal.categorizedIngredients.prepped.length > 0 && (
@@ -848,14 +919,15 @@ export default function DashboardPage() {
                       )}
                     </div>
                   </div>
-                  <div className="px-4 pb-2 flex justify-end">
+                  {/* MODIFICAT: Buton de Swap cu design premium */}
+                  <div className="px-4 py-3 flex justify-end bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800 rounded-b-lg">
                     <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleRegenerateSingleMeal(index)}
+                      variant="default"
+                      className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-md hover:shadow-lg transition-shadow"
+                      onClick={() => handleOpenSwapDialog(index)}
                     >
-                      <RefreshCw className="mr-2 h-3 w-3" />
-                      Regenerate this meal
+                      <Replace className="mr-2 h-4 w-4" />
+                      Swap this Meal
                     </Button>
                   </div>
                 </AccordionContent>
@@ -864,6 +936,85 @@ export default function DashboardPage() {
           </Accordion>
         </>
       )}
+      <Dialog open={isSwapDialogOpen} onOpenChange={setIsSwapDialogOpen}>
+        {/* MODIFICAT: Dialog cu design premium */}
+        <DialogContent className="sm:max-w-3xl">
+          {" "}
+          {/* Mărim puțin dialogul */}
+          <DialogHeader>
+            <DialogTitle className="text-2xl">
+              Choose an Alternative
+            </DialogTitle>
+            <DialogDescription>
+              Select a meal that fits your taste. Macros are similar to your
+              original choice.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2 max-h-[70vh] overflow-y-auto pr-3">
+            {loadingAlternatives ? (
+              <div className="flex flex-col justify-center items-center h-60 gap-3">
+                <RefreshCw className="h-8 w-8 animate-spin text-blue-500" />
+                <p className="text-slate-500">Finding tasty alternatives...</p>
+              </div>
+            ) : mealAlternatives.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {mealAlternatives.map((altMeal, altIndex) => (
+                  <div
+                    key={altIndex}
+                    // Animație subtilă la apariție
+                    style={{ animationDelay: `${altIndex * 100}ms` }}
+                    className="animate-in fade-in slide-in-from-bottom-5 group relative flex flex-col rounded-xl border bg-white dark:bg-slate-900 overflow-hidden transition-all hover:shadow-lg hover:-translate-y-1"
+                  >
+                    {/* Imaginea */}
+                    <div className="h-40 bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                      {altMeal.imageUrl ? (
+                        <img
+                          src={altMeal.imageUrl}
+                          alt={altMeal.name}
+                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center h-full">
+                          <UtensilsCrossed className="h-12 w-12 text-slate-300 dark:text-slate-600" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Detalii */}
+                    <div className="p-4 flex flex-col flex-grow">
+                      <h3 className="font-bold text-lg mb-2">{altMeal.name}</h3>
+                      <div className="text-xs text-slate-500 dark:text-slate-400 flex-grow">
+                        <p>
+                          {Math.round(altMeal.total_calories)} kcal &bull; P:{" "}
+                          {Math.round(altMeal.total_protein)}g &bull; C:{" "}
+                          {Math.round(altMeal.total_carbs)}g &bull; F:{" "}
+                          {Math.round(altMeal.total_fats)}g
+                        </p>
+                      </div>
+
+                      {/* Butonul de selectare */}
+                      <Button
+                        className="mt-4 w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold"
+                        onClick={() => handleSelectAlternative(altMeal)}
+                      >
+                        <CheckCircle className="mr-2 h-4 w-4" />
+                        Select this Meal
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center text-slate-500 py-16">
+                <p className="font-semibold text-lg">No alternatives found</p>
+                <p className="text-sm mt-1">
+                  Try regenerating the entire day for a fresh set of meals.
+                </p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
