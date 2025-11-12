@@ -411,29 +411,63 @@ export function getMealAlternatives(
     disliked_foods: profile.disliked_foods || [],
   };
 
-  const { targetCalories, liked_foods, disliked_foods } = safeProfile;
-  const mealDistribution = { breakfast: 0.3, lunch: 0.4, dinner: 0.3 };
-  const distributionRatio = mealDistribution[mealType] || 0.33;
-  const mealTargetCalories = targetCalories * distributionRatio;
+  const { liked_foods, disliked_foods } = safeProfile;
 
-  // Obținem toate rețetele potrivite pentru acest tip de masă
-  const alternatives = recipes
-    .filter(
-      (r) =>
-        r.mealType.includes(mealType) &&
-        r.id !== currentMeal?.id &&
-        !r.tags.some((tag) => disliked_foods.includes(tag))
+  // --- PASUL 1: Definirea țintelor și a toleranțelor ---
+  // Folosim masa curentă ca punct de referință pentru calorii și macro-uri.
+  const targetCalories = currentMeal.total_calories;
+  const targetProtein = currentMeal.total_protein;
+
+  // Definim praguri de toleranță stricte. Acestea pot fi ajustate.
+  const CALORIE_TOLERANCE = 75; // +/- 75 kcal
+  const PROTEIN_TOLERANCE = 10; // +/- 10g
+
+  // --- PASUL 2: Găsirea și crearea meselor candidate ---
+  // Găsim toate rețetele posibile, fără a le scala încă.
+  const candidateRecipes = recipes.filter(
+    (r) =>
+      r.mealType.includes(mealType) &&
+      r.id !== currentMeal?.id &&
+      !r.tags.some((tag) => disliked_foods.includes(tag))
+  );
+
+  // Creăm mesele scalate pe baza caloriilor țintă ale mesei ORIGINALE.
+  // Acest lucru asigură că toate alternativele sunt comparabile.
+  const candidateMeals = candidateRecipes.map((recipe) =>
+    createMealFromRecipe(
+      recipe,
+      targetCalories, // Scalăm toate alternativele la caloriile mesei curente
+      mealType,
+      safeProfile,
+      preppedComponents
     )
-    .slice(0, 5) // Limităm la 5 alternative
-    .map((recipe) =>
-      createMealFromRecipe(
-        recipe,
-        mealTargetCalories,
-        mealType,
-        safeProfile,
-        preppedComponents
-      )
-    );
+  );
 
-  return alternatives;
+  // --- PASUL 3: Filtrarea strictă a alternativelor ---
+  const suitableAlternatives = candidateMeals.filter((alt) => {
+    const calorieDiff = Math.abs(alt.total_calories - targetCalories);
+    const proteinDiff = Math.abs(alt.total_protein - targetProtein);
+
+    // Verificăm dacă alternativa se încadrează în ambele praguri
+    return calorieDiff <= CALORIE_TOLERANCE && proteinDiff <= PROTEIN_TOLERANCE;
+  });
+
+  // --- PASUL 4: Sortarea inteligentă a rezultatelor ---
+  // Sortăm alternativele rămase pe baza "potrivirii" lor.
+  // O valoare mai mică înseamnă o potrivire mai bună.
+  suitableAlternatives.sort((a, b) => {
+    const scoreA =
+      Math.abs(a.total_calories - targetCalories) +
+      Math.abs(a.total_protein - targetProtein) * 2; // Dăm o importanță dublă proteinelor
+
+    const scoreB =
+      Math.abs(b.total_calories - targetCalories) +
+      Math.abs(b.total_protein - targetProtein) * 2;
+
+    return scoreA - scoreB;
+  });
+
+  // --- PASUL 5: Returnarea celor mai bune 4-6 alternative ---
+  // Returnăm un număr rezonabil de opțiuni de înaltă calitate.
+  return suitableAlternatives.slice(0, 6);
 }
