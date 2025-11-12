@@ -11,6 +11,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Coffee, Sun, Moon, UtensilsCrossed } from "lucide-react";
 
 // Componenta pentru iconița mesei (similară cu cea din vechiul dashboard)
@@ -28,7 +29,7 @@ const MealIcon = ({ mealType, className = "h-5 w-5" }) => {
   return <UtensilsCrossed className={`${className} text-slate-500`} />;
 };
 
-export function TodaysMission({ plan, onViewMeal }) {
+export function TodaysMission({ plan, onViewMeal, onToggleMealConsumed }) {
   // --- Logica pentru a determina masa următoare ---
   const nextMeal = useMemo(() => {
     if (!plan?.plan || plan.plan.length === 0) {
@@ -81,7 +82,6 @@ export function TodaysMission({ plan, onViewMeal }) {
       </CardContent>
 
       <CardFooter className="flex flex-col gap-4">
-        {/* Butonul principal pentru a vedea masa */}
         <Button
           size="lg"
           className="w-full"
@@ -90,22 +90,40 @@ export function TodaysMission({ plan, onViewMeal }) {
           View Meal Details
         </Button>
 
-        {/* Navigarea rapidă între mese */}
-        <div className="flex justify-center items-center gap-4 w-full">
-          {plan.plan.map((meal, index) => (
-            <button
-              key={index}
-              onClick={() => onViewMeal(meal)}
-              className={`p-2 rounded-full transition-colors ${
-                index === nextMeal.mealIndex
-                  ? "bg-blue-100 dark:bg-blue-900"
-                  : "hover:bg-slate-100 dark:hover:bg-slate-800"
-              }`}
-              title={`View ${meal.type || "meal"}`}
-            >
-              <MealIcon mealType={meal.type} />
-            </button>
-          ))}
+        {/* Navigarea rapidă cu checkbox-uri */}
+        <div className="flex justify-around items-center w-full pt-2">
+          {plan.plan.map((meal, index) => {
+            const isConsumed = plan.consumed_meals?.includes(index);
+            return (
+              <div key={index} className="flex flex-col items-center gap-2">
+                <button
+                  onClick={() => onViewMeal(meal)}
+                  className={`p-2 rounded-full transition-colors ${
+                    index === nextMeal.mealIndex
+                      ? "bg-blue-100 dark:bg-blue-900"
+                      : "hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
+                  title={`View ${meal.type || "meal"}`}
+                >
+                  <MealIcon mealType={meal.type} />
+                </button>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`meal-${index}`}
+                    checked={isConsumed}
+                    onCheckedChange={() => onToggleMealConsumed(index)}
+                    aria-label={`Mark ${meal.name} as eaten`}
+                  />
+                  <label
+                    htmlFor={`meal-${index}`}
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 sr-only"
+                  >
+                    {meal.name}
+                  </label>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </CardFooter>
     </Card>

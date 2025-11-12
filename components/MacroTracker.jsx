@@ -1,6 +1,7 @@
 // components/MacroTracker.jsx
 "use client";
 
+import { useMemo } from "react"; // <-- ADAUGĂ ACEST IMPORT
 import {
   Card,
   CardContent,
@@ -15,14 +16,12 @@ import {
   PolarAngleAxis,
 } from "recharts";
 
-// O componentă reutilizabilă pentru un singur inel de progres
-const MacroRing = ({ name, planValue, targetValue, color }) => {
-  const value = Math.round(planValue);
-  const total = Math.round(targetValue);
+// Componenta MacroRing rămâne aproape la fel, dar va afișa Consumat vs. Planificat
+const MacroRing = ({ name, consumedValue, planValue, color }) => {
+  const consumed = Math.round(consumedValue);
+  const total = Math.round(planValue);
 
-  // Calculăm procentajul, dar ne asigurăm că nu depășește 100% pentru afișajul vizual
-  // Inelul se va umple complet la 100%, chiar dacă valoarea depășește ținta.
-  const percentage = total > 0 ? (value / total) * 100 : 0;
+  const percentage = total > 0 ? (consumed / total) * 100 : 0;
 
   const data = [{ name: name, value: percentage }];
 
@@ -31,43 +30,63 @@ const MacroRing = ({ name, planValue, targetValue, color }) => {
       <div className="w-full h-32 relative">
         <ResponsiveContainer width="100%" height="100%">
           <RadialBarChart
-            innerRadius="70%" // Creează efectul de "inel"
+            innerRadius="70%"
             outerRadius="90%"
             data={data}
-            startAngle={90} // Începe de sus
-            endAngle={-270} // Se termină tot sus (cerc complet)
-            barSize={12} // Grosimea barei
+            startAngle={90}
+            endAngle={-270}
+            barSize={12}
           >
-            {/* Axa care stă în spatele barei, practic background-ul inelului */}
             <PolarAngleAxis
               type="number"
               domain={[0, 100]}
               angleAxisId={0}
               tick={false}
             />
-            {/* Bara de progres efectivă */}
             <RadialBar
               background
               dataKey="value"
               angleAxisId={0}
               fill={color}
-              cornerRadius={6} // Colțuri rotunjite pentru bară
+              cornerRadius={6}
               className="transition-all duration-500"
             />
           </RadialBarChart>
         </ResponsiveContainer>
-        {/* Textul din centrul inelului */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-          <p className="text-xl font-bold">{value}g</p>
+          {/* Afișăm valoarea consumată în centru */}
+          <p className="text-xl font-bold">{consumed}g</p>
         </div>
       </div>
       <p className="font-semibold mt-2">{name}</p>
-      <p className="text-xs text-slate-500">Target: {total}g</p>
+      {/* Afișăm ținta planificată sub inel */}
+      <p className="text-xs text-slate-500">Plan: {total}g</p>
     </div>
   );
 };
 
 export function MacroTracker({ profile, plan }) {
+  // --- NOU: Calculăm totalurile consumate ---
+  const consumedTotals = useMemo(() => {
+    if (!plan?.plan || !plan.consumed_meals) {
+      return { protein: 0, carbs: 0, fats: 0 };
+    }
+
+    // Reducem array-ul de mese la un total al macronutrienților consumați
+    return plan.consumed_meals.reduce(
+      (acc, mealIndex) => {
+        const meal = plan.plan[mealIndex];
+        if (meal) {
+          acc.protein += meal.total_protein;
+          acc.carbs += meal.total_carbs;
+          acc.fats += meal.total_fats;
+        }
+        return acc;
+      },
+      { protein: 0, carbs: 0, fats: 0 }
+    );
+  }, [plan]); // Recalculăm doar când planul se schimbă (ex: la bifarea unui checkbox)
+
   if (!profile || !plan) {
     return (
       <Card>
@@ -84,30 +103,30 @@ export function MacroTracker({ profile, plan }) {
   return (
     <Card className="h-full">
       <CardHeader>
-        <CardTitle>Macro Tracker</CardTitle>
+        <CardTitle>Live Macro Tracker</CardTitle>
         <CardDescription>
-          Your daily progress against your targets.
+          Your consumed macros vs. today's plan.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-3 gap-4">
           <MacroRing
             name="Protein"
-            planValue={plan.totals.protein}
-            targetValue={profile.targetProtein}
-            color="#ef4444" // Roșu (Tailwind red-500)
+            consumedValue={consumedTotals.protein} // <-- Valoarea consumată
+            planValue={plan.totals.protein} // <-- Valoarea totală a planului
+            color="#ef4444"
           />
           <MacroRing
             name="Carbs"
-            planValue={plan.totals.carbs}
-            targetValue={profile.targetCarbs}
-            color="#f59e0b" // Ambră (Tailwind amber-500)
+            consumedValue={consumedTotals.carbs} // <-- Valoarea consumată
+            planValue={plan.totals.carbs} // <-- Valoarea totală a planului
+            color="#f59e0b"
           />
           <MacroRing
             name="Fats"
-            planValue={plan.totals.fats}
-            targetValue={profile.targetFats}
-            color="#3b82f6" // Albastru (Tailwind blue-500)
+            consumedValue={consumedTotals.fats} // <-- Valoarea consumată
+            planValue={plan.totals.fats} // <-- Valoarea totală a planului
+            color="#3b82f6"
           />
         </div>
       </CardContent>

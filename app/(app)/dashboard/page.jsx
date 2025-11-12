@@ -529,6 +529,40 @@ export default function DashboardPage() {
     router.push("/");
   };
 
+  const handleToggleMealConsumed = async (mealIndex) => {
+    if (!currentPlan || !profile) return;
+
+    const planDate = getFormattedDate(currentDate);
+
+    const currentConsumed = currentPlan.consumed_meals || [];
+    let newConsumedMeals;
+
+    if (currentConsumed.includes(mealIndex)) {
+      newConsumedMeals = currentConsumed.filter((index) => index !== mealIndex);
+    } else {
+      newConsumedMeals = [...currentConsumed, mealIndex];
+    }
+
+    const updatedPlan = {
+      ...currentPlan,
+      consumed_meals: newConsumedMeals,
+    };
+
+    setCurrentPlan(updatedPlan);
+    setWeeklyPlans((prev) => new Map(prev).set(planDate, updatedPlan));
+    setAllFetchedPlans((prev) => new Map(prev).set(planDate, updatedPlan));
+
+    try {
+      await supabase
+        .from("daily_meal_plans")
+        .update({ consumed_meals: newConsumedMeals })
+        .eq("user_id", profile.id)
+        .eq("plan_date", planDate);
+    } catch (error) {
+      console.error("Error updating consumed meals:", error);
+    }
+  };
+
   if (!profile) return <LoadingSpinner />;
   if (error) return <div className="text-red-500 text-center">{error}</div>;
 
@@ -657,6 +691,7 @@ export default function DashboardPage() {
               setSelectedMeal(meal);
               setIsMealDetailOpen(true);
             }}
+            onToggleMealConsumed={handleToggleMealConsumed}
           />
 
           {/* --- WIDGET 2: MACRO TRACKER --- */}
