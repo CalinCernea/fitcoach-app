@@ -63,6 +63,7 @@ import {
   Moon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { WaterTracker } from "@/components/WaterTracker";
 
 // Helper Functions
 const getFormattedDate = (date) => date.toISOString().split("T")[0];
@@ -950,6 +951,14 @@ export default function DashboardPage() {
               </AccordionItem>
             ))}
           </Accordion>
+
+          {/* --- LOCAȚIA CORECTĂ ESTE AICI --- */}
+          <div className="mt-8">
+            <WaterTracker
+              userId={profile.id}
+              dailyTarget={profile.daily_water_target || 2500}
+            />
+          </div>
         </>
       )}
       <Dialog open={isSwapDialogOpen} onOpenChange={setIsSwapDialogOpen}>

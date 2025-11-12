@@ -63,6 +63,7 @@ const calculateAdvancedMetrics = (data) => {
     targetProtein: Math.round(proteinGrams),
     targetCarbs: Math.round(carbsGrams),
     targetFats: Math.round(fatGrams),
+    daily_water_target: Math.round(weight * 35),
   };
 };
 

@@ -146,6 +146,7 @@ export default function ProfilePage() {
     const updatePayload = {
       ...cleanData,
       ...newMetrics,
+      daily_water_target: Math.round(cleanData.weight * 35),
       liked_foods: profileData.liked_foods,
       disliked_foods: profileData.disliked_foods,
     };
