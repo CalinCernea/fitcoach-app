@@ -189,7 +189,10 @@ function createMealFromRecipe(
   }
 
   // Calculăm caloriile scalate
-  scaledMeal.total_calories = Math.round(recipe.baseCalories * scalingFactor);
+  const variation = () => 0.98 + Math.random() * 0.04; // O variație mai mică, de +/- 2%
+  scaledMeal.total_calories = Math.round(
+    recipe.baseCalories * scalingFactor * variation()
+  );
 
   // Calculăm macronutrienții
   if (
