@@ -64,6 +64,10 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { WaterTracker } from "@/components/WaterTracker";
+import { TodaysMission } from "@/components/TodaysMission";
+import { MacroTracker } from "@/components/MacroTracker";
+import { WeeklyOverviewWidget } from "@/components/WeeklyOverviewWidget";
+import { MealDetailDialog } from "@/components/MealDetailDialog";
 
 // Helper Functions
 const getFormattedDate = (date) => date.toISOString().split("T")[0];
@@ -157,6 +161,8 @@ export default function DashboardPage() {
   const [mealAlternatives, setMealAlternatives] = useState([]);
   const [loadingAlternatives, setLoadingAlternatives] = useState(false);
   const [activeMealIndex, setActiveMealIndex] = useState(null);
+  const [isMealDetailOpen, setIsMealDetailOpen] = useState(false);
+  const [selectedMeal, setSelectedMeal] = useState(null);
 
   const getPrepStatusForDate = useCallback(
     (date) => {
@@ -539,7 +545,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto p-4">
+    <div className="w-full max-w-6xl mx-auto p-4 md:p-6">
       <Suspense fallback={null}>
         <RefreshHandler
           profile={profile}
@@ -548,12 +554,13 @@ export default function DashboardPage() {
         />
       </Suspense>
 
-      <header className="flex justify-between items-center mb-6">
+      {/* ================= HEADER (PĂSTRAT) ================= */}
+      <header className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
         <div>
-          <h1 className="text-3xl font-bold">
+          <h1 className="text-2xl md:text-3xl font-bold">
             Welcome, {profile.name || "User"}!
           </h1>
-          <p className="text-slate-500">Your meal plan dashboard.</p>
+          <p className="text-slate-500">Your command center is ready.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" asChild>
@@ -621,358 +628,82 @@ export default function DashboardPage() {
         </div>
       </header>
 
+      {/* ================= NOTIFICARE PREP MODE (PĂSTRATĂ) ================= */}
       {preppedComponents && (
         <Card className="mb-6 border-green-500 bg-green-50 dark:bg-green-900/20">
           <CardContent className="pt-6">
             <div className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-green-600" />
               <p className="text-green-700 dark:text-green-400 font-medium">
-                Prep Mode Active! Your meals are using prepped components with
-                optimized instructions.
+                Prep Mode Active! Your meals are using prepped components.
               </p>
             </div>
           </CardContent>
         </Card>
       )}
 
-      <Card className="w-full mb-8">
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <CardTitle>Weekly Overview</CardTitle>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => changeWeek(-1)}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => changeWeek(1)}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 md:grid-cols-7 gap-2">
-          {Array.from({ length: 7 }).map((_, i) => {
-            const dayDate = addDays(startOfWeek, i);
-            const dayString = getFormattedDate(dayDate);
-            const plan = weeklyPlans.get(dayString);
-            const isSelected = getFormattedDate(currentDate) === dayString;
-            return (
-              <button
-                key={dayString}
-                onClick={() => handleDaySelect(dayDate)}
-                className={`p-2 rounded-lg text-left border-2 transition-colors ${
-                  isSelected
-                    ? "border-blue-500 bg-blue-50 dark:bg-blue-900/50"
-                    : "border-transparent hover:bg-slate-100 dark:hover:bg-slate-800"
-                }`}
-              >
-                <p className="font-bold text-sm">
-                  {dayDate.toLocaleDateString("en-US", { weekday: "short" })}
-                </p>
-                <p className="text-xs text-slate-500 mb-2">
-                  {dayDate.toLocaleDateString("en-US", {
-                    day: "2-digit",
-                    month: "2-digit",
-                  })}
-                </p>
-                {plan ? (
-                  <div className="text-xs">
-                    <p className="font-semibold">
-                      {Math.round(plan.totals.calories)} kcal
-                    </p>
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-400">No plan</p>
-                )}
-              </button>
-            );
-          })}
-        </CardContent>
-      </Card>
-
-      <h2 className="text-2xl font-bold mb-4">
-        Details for:{" "}
-        {currentDate.toLocaleDateString("en-US", {
-          weekday: "long",
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        })}
-      </h2>
-
+      {/* ================= NOUL GRID 2x2 "COMMAND CENTER" ================= */}
       {!currentPlan ? (
-        <div className="text-center p-8">
-          Loading plan for the selected day...
+        <div className="flex items-center justify-center h-96">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
         </div>
       ) : (
-        <>
-          <Card className="w-full mb-8">
-            <CardHeader>
-              <CardTitle>Day's Targets vs. Plan</CardTitle>
-              <CardDescription>
-                Your goals for the day compared to the generated plan.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-              <div className="p-4 bg-slate-100 dark:bg-slate-800/50 rounded-lg">
-                <Label className="text-sm">Target Calories</Label>
-                <p className="text-2xl font-bold text-blue-500">
-                  {Math.round(profile.targetCalories || 0)}
-                </p>
-                <p className="text-xs text-slate-400">
-                  Plan: {Math.round(currentPlan.totals.calories || 0)}
-                </p>
-              </div>
-              <div className="p-4 bg-slate-100 dark:bg-slate-800/50 rounded-lg">
-                <Label className="text-sm">Protein</Label>
-                <p className="text-xl font-semibold">
-                  {Math.round(profile.targetProtein || 0)}g
-                </p>
-                <p className="text-xs text-slate-400">
-                  Plan: {Math.round(currentPlan.totals.protein || 0)}g
-                </p>
-              </div>
-              <div className="p-4 bg-slate-100 dark:bg-slate-800/50 rounded-lg">
-                <Label className="text-sm">Carbs</Label>
-                <p className="text-xl font-semibold">
-                  {Math.round(profile.targetCarbs || 0)}g
-                </p>
-                <p className="text-xs text-slate-400">
-                  Plan: {Math.round(currentPlan.totals.carbs || 0)}g
-                </p>
-              </div>
-              <div className="p-4 bg-slate-100 dark:bg-slate-800/50 rounded-lg">
-                <Label className="text-sm">Fats</Label>
-                <p className="text-xl font-semibold">
-                  {Math.round(profile.targetFats || 0)}g
-                </p>
-                <p className="text-xs text-slate-400">
-                  Plan: {Math.round(currentPlan.totals.fats || 0)}g
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* --- WIDGET 1: TODAY'S MISSION --- */}
+          <TodaysMission
+            profile={profile}
+            plan={currentPlan}
+            onViewMeal={(meal) => {
+              setSelectedMeal(meal);
+              setIsMealDetailOpen(true);
+            }}
+          />
 
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold">Meals for the Day</h2>
-            <Button variant="outline" onClick={handleRegenerate}>
-              <RefreshCw className="mr-2 h-4 w-4" /> Regenerate for this Day
-            </Button>
-          </div>
+          {/* --- WIDGET 2: MACRO TRACKER --- */}
+          <MacroTracker profile={profile} plan={currentPlan} />
 
-          <Accordion
-            type="single"
-            collapsible
-            className="w-full"
-            defaultValue="item-0"
-          >
-            {currentPlan.plan.map((meal, index) => (
-              <AccordionItem
-                value={`item-${index}`}
-                key={`${index}-${meal.id}-${meal.total_calories}`}
-              >
-                {/* MODIFICAT: AccordionTrigger cu design premium */}
-                <AccordionTrigger className="text-lg font-medium hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg px-4">
-                  <div className="flex justify-between w-full items-center">
-                    <div className="flex items-center gap-4">
-                      <MealIcon mealType={meal.type} />
-                      <span className="text-left">{meal.name}</span>
-                      {meal.isPrepMode && (
-                        <Badge
-                          variant="outline"
-                          className="border-green-500 text-green-600"
-                        >
-                          <Sparkles className="h-3 w-3 mr-1" />
-                          Prep
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="text-right text-sm font-semibold text-slate-600 dark:text-slate-300 pr-2">
-                      {Math.round(meal.total_calories)}
-                      <span className="text-xs text-slate-400 ml-1">kcal</span>
-                    </div>
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent>
-                  {meal.imageUrl && (
-                    <div className="relative h-48 w-full mb-4 rounded-lg overflow-hidden">
-                      <img
-                        src={meal.imageUrl}
-                        alt={meal.name}
-                        className="absolute h-full w-full object-cover transition-transform duration-300 hover:scale-105"
-                      />
-                    </div>
-                  )}
-                  <div className="px-4 pt-2 pb-4 border-b border-slate-200 dark:border-slate-700">
-                    <div className="grid grid-cols-3 gap-4 text-center">
-                      <div className="flex flex-col items-center">
-                        <span className="text-xs text-slate-500">Protein</span>
-                        <div className="flex items-center gap-1 font-semibold">
-                          <Beef className="h-4 w-4 text-red-500" />
-                          {Math.round(meal.total_protein)}g
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-center">
-                        <span className="text-xs text-slate-500">Carbs</span>
-                        <div className="flex items-center gap-1 font-semibold">
-                          <Wheat className="h-4 w-4 text-yellow-500" />
-                          {Math.round(meal.total_carbs)}g
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-center">
-                        <span className="text-xs text-slate-500">Fats</span>
-                        <div className="flex items-center gap-1 font-semibold">
-                          <Droplets className="h-4 w-4 text-blue-500" />
-                          {Math.round(meal.total_fats)}g
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="grid md:grid-cols-2 gap-8 p-4">
-                    <div>
-                      <h4 className="font-semibold mb-2 flex items-center gap-2">
-                        <ShoppingCart className="h-4 w-4" /> Ingredients
-                      </h4>
+          {/* --- WIDGET 3: WEEKLY OVERVIEW --- */}
+          <WeeklyOverviewWidget
+            plans={weeklyPlans}
+            currentDate={currentDate}
+            startOfWeek={startOfWeek}
+            onDaySelect={handleDaySelect}
+            changeWeek={changeWeek}
+          />
 
-                      {meal.isPrepMode && meal.categorizedIngredients ? (
-                        <>
-                          {meal.categorizedIngredients.prepped.length > 0 && (
-                            <div className="mb-4">
-                              <p className="text-xs text-green-600 font-medium mb-2 flex items-center gap-1">
-                                <CheckCircle className="h-3 w-3" />
-                                Prepped Components (from fridge)
-                              </p>
-                              <ul className="space-y-2">
-                                {meal.categorizedIngredients.prepped.map(
-                                  (ing, i) => (
-                                    <li
-                                      key={i}
-                                      className="flex justify-between items-center p-2 rounded-md bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800"
-                                    >
-                                      <div className="flex items-center gap-2">
-                                        <CheckCircle className="h-4 w-4 text-green-500" />
-                                        <span>{ing.name}</span>
-                                      </div>
-                                      <span className="font-mono text-slate-500">
-                                        {ing.amount}
-                                        {ing.unit}
-                                      </span>
-                                    </li>
-                                  )
-                                )}
-                              </ul>
-                            </div>
-                          )}
-
-                          {meal.categorizedIngredients.fresh.length > 0 && (
-                            <div>
-                              <p className="text-xs text-blue-600 font-medium mb-2">
-                                Fresh Ingredients
-                              </p>
-                              <ul className="space-y-2">
-                                {meal.categorizedIngredients.fresh.map(
-                                  (ing, i) => (
-                                    <li
-                                      key={i}
-                                      className="flex justify-between items-center p-2 rounded-md bg-slate-50 dark:bg-slate-800/50"
-                                    >
-                                      <span>{ing.name}</span>
-                                      <span className="font-mono text-slate-500">
-                                        {ing.amount}
-                                        {ing.unit}
-                                      </span>
-                                    </li>
-                                  )
-                                )}
-                              </ul>
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <ul className="space-y-2">
-                          {meal.ingredients &&
-                            meal.ingredients.map((ing, i) => (
-                              <li
-                                key={i}
-                                className="flex justify-between items-center p-2 rounded-md bg-slate-50 dark:bg-slate-800/50"
-                              >
-                                <div className="flex items-center gap-2">
-                                  <CheckCircle className="h-4 w-4 text-green-500" />
-                                  <span>{ing.name}</span>
-                                </div>
-                                <span className="font-mono text-slate-500">
-                                  {ing.amount}
-                                  {ing.unit}
-                                </span>
-                              </li>
-                            ))}
-                        </ul>
-                      )}
-                    </div>
-                    <div>
-                      <h4 className="font-semibold mb-2 flex items-center gap-2">
-                        <BookOpen className="h-4 w-4" />
-                        {meal.isPrepMode
-                          ? "Quick Assembly Instructions"
-                          : "Instructions"}
-                      </h4>
-                      {meal.instructions && meal.instructions.length > 0 ? (
-                        <ol className="list-decimal list-inside space-y-2 text-slate-600 dark:text-slate-300">
-                          {meal.instructions.map((step, i) => (
-                            <li key={i}>{step}</li>
-                          ))}
-                        </ol>
-                      ) : (
-                        <p className="text-sm text-slate-500">
-                          No instructions available for this meal.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  {/* MODIFICAT: Buton de Swap cu design premium */}
-                  <div className="px-4 py-3 flex justify-end bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800 rounded-b-lg">
-                    <Button
-                      variant="default"
-                      className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-md hover:shadow-lg transition-shadow"
-                      onClick={() => handleOpenSwapDialog(index)}
-                    >
-                      <Replace className="mr-2 h-4 w-4" />
-                      Swap this Meal
-                    </Button>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
-
-          {/* --- LOCAȚIA CORECTĂ ESTE AICI --- */}
-          <div className="mt-8">
-            <WaterTracker
-              userId={profile.id}
-              dailyTarget={profile.daily_water_target || 2500}
-            />
-          </div>
-        </>
+          {/* --- WIDGET 4: SMART WATER TRACKER --- */}
+          <WaterTracker
+            userId={profile.id}
+            dailyTarget={profile.daily_water_target || 2500}
+          />
+        </div>
       )}
+
+      {/* ================= DIALOGURI (RĂMÂN LA FINAL) ================= */}
+      <MealDetailDialog
+        meal={selectedMeal}
+        isOpen={isMealDetailOpen}
+        onOpenChange={setIsMealDetailOpen}
+        onSwap={() => {
+          const mealIndex = currentPlan.plan.findIndex(
+            (m) => m.id === selectedMeal.id
+          );
+          if (mealIndex !== -1) {
+            setIsMealDetailOpen(false);
+            // Așteaptă puțin ca primul dialog să se închidă
+            setTimeout(() => handleOpenSwapDialog(mealIndex), 150);
+          }
+        }}
+      />
+
       <Dialog open={isSwapDialogOpen} onOpenChange={setIsSwapDialogOpen}>
-        {/* MODIFICAT: Dialog cu design premium */}
         <DialogContent className="sm:max-w-3xl">
-          {" "}
-          {/* Mărim puțin dialogul */}
           <DialogHeader>
             <DialogTitle className="text-2xl">
               Choose an Alternative
             </DialogTitle>
             <DialogDescription>
-              Select a meal that fits your taste. Macros are similar to your
-              original choice.
+              Select a meal that fits your taste. Macros are similar.
             </DialogDescription>
           </DialogHeader>
           <div className="py-2 max-h-[70vh] overflow-y-auto pr-3">
@@ -986,11 +717,9 @@ export default function DashboardPage() {
                 {mealAlternatives.map((altMeal, altIndex) => (
                   <div
                     key={altIndex}
-                    // Animație subtilă la apariție
                     style={{ animationDelay: `${altIndex * 100}ms` }}
                     className="animate-in fade-in slide-in-from-bottom-5 group relative flex flex-col rounded-xl border bg-white dark:bg-slate-900 overflow-hidden transition-all hover:shadow-lg hover:-translate-y-1"
                   >
-                    {/* Imaginea */}
                     <div className="h-40 bg-slate-100 dark:bg-slate-800 overflow-hidden">
                       {altMeal.imageUrl ? (
                         <img
@@ -1004,8 +733,6 @@ export default function DashboardPage() {
                         </div>
                       )}
                     </div>
-
-                    {/* Detalii */}
                     <div className="p-4 flex flex-col flex-grow">
                       <h3 className="font-bold text-lg mb-2">{altMeal.name}</h3>
                       <div className="text-xs text-slate-500 dark:text-slate-400 flex-grow">
@@ -1016,8 +743,6 @@ export default function DashboardPage() {
                           {Math.round(altMeal.total_fats)}g
                         </p>
                       </div>
-
-                      {/* Butonul de selectare */}
                       <Button
                         className="mt-4 w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold"
                         onClick={() => handleSelectAlternative(altMeal)}
