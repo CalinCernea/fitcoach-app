@@ -149,6 +149,7 @@ export default function DashboardPage() {
   const [shoppingListPeriod, setShoppingListPeriod] = useState(7);
   const [preppedComponents, setPreppedComponents] = useState(null);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [allFetchedPlans, setAllFetchedPlans] = useState(new Map());
 
   // NOU: Stări pentru dialogul de swap
   const [isSwapDialogOpen, setIsSwapDialogOpen] = useState(false);
@@ -184,6 +185,7 @@ export default function DashboardPage() {
     [profile]
   );
 
+  // ACEASTA ESTE FUNCȚIA NOUĂ
   const fetchPlansForWeek = useCallback(async (userId, weekStartDate) => {
     const datesToFetch = Array.from({ length: 7 }, (_, i) =>
       getFormattedDate(addDays(weekStartDate, i))
@@ -193,13 +195,20 @@ export default function DashboardPage() {
       .select("plan_date, plan_data")
       .eq("user_id", userId)
       .in("plan_date", datesToFetch);
+
     if (error) {
       console.error("Error fetching weekly plans:", error);
-      return new Map();
+      return;
     }
-    const plansMap = new Map(data.map((p) => [p.plan_date, p.plan_data]));
-    setWeeklyPlans(plansMap);
-    return plansMap;
+
+    const newPlansMap = new Map(data.map((p) => [p.plan_date, p.plan_data]));
+
+    // Actualizăm planurile pentru săptămâna curentă (pentru afișaj)
+    setWeeklyPlans(newPlansMap);
+
+    // Adăugăm planurile noi la sursa noastră de adevăr
+    setAllFetchedPlans((prev) => new Map([...prev, ...newPlansMap]));
+    return newPlansMap;
   }, []);
 
   const fetchProfileAndPlans = useCallback(async () => {
@@ -260,18 +269,34 @@ export default function DashboardPage() {
     fetchProfileAndPlans();
   }, [fetchProfileAndPlans]);
 
+  // BLOCUL NOU PENTRU SHOPPING LIST
   useEffect(() => {
-    if (weeklyPlans.size > 0) {
-      const plansForPeriod = Array.from(weeklyPlans.values()).slice(
-        0,
-        shoppingListPeriod
+    // Verificăm dacă avem planuri din care să calculăm
+    if (allFetchedPlans.size > 0) {
+      console.log(
+        "🛒 Recalculating shopping list using the main data source..."
       );
+
+      // 1. Definim datele de care avem nevoie: de azi pentru X zile
+      const today = new Date();
+      const datesForShoppingList = Array.from(
+        { length: shoppingListPeriod },
+        (_, i) => getFormattedDate(addDays(today, i))
+      );
+
+      // 2. Extragem planurile relevante din sursa noastră de adevăr
+      const relevantPlans = datesForShoppingList
+        .map((date) => allFetchedPlans.get(date))
+        .filter(Boolean); // Filtrăm zilele pentru care nu avem (încă) un plan
+
+      // 3. Generăm lista de cumpărături
       const newList = generateShoppingList(
-        plansForPeriod.map((p) => ({ plan_data: p }))
+        relevantPlans.map((p) => ({ plan_data: p }))
       );
+
       setShoppingList(newList);
     }
-  }, [weeklyPlans, shoppingListPeriod]);
+  }, [allFetchedPlans, shoppingListPeriod]); // Rulează când se schimbă ORICE plan sau perioada
 
   const ensureMealPlansExist = async (userId, userProfile) => {
     const datesToCheck = [];
@@ -310,23 +335,17 @@ export default function DashboardPage() {
   const handleRegenerate = async () => {
     if (!profile) return;
     setLoading(true);
-
-    // Aflăm statusul de prep specific pentru ziua curentă
-    const componentsForThisDay = getPrepStatusForDate(currentDate); // << APELĂM FUNCȚIA HELPER
-
-    console.log(
-      `🔄 Regenerating day ${getFormattedDate(currentDate)}. Prep mode is ${
-        componentsForThisDay ? "ACTIVE" : "INACTIVE"
-      }.`
-    );
-
-    const newPlan = generateAdvancedMealPlan(profile, componentsForThisDay); // << TRIMITEM STATUSUL CORECT
+    const componentsForThisDay = getPrepStatusForDate(currentDate);
+    const newPlan = generateAdvancedMealPlan(profile, componentsForThisDay);
 
     if (newPlan) {
       const dateString = getFormattedDate(currentDate);
       await savePlan(profile.id, dateString, newPlan);
       setCurrentPlan(newPlan);
+
+      // Actualizează ambele hărți
       setWeeklyPlans((prev) => new Map(prev).set(dateString, newPlan));
+      setAllFetchedPlans((prev) => new Map(prev).set(dateString, newPlan));
     }
     setLoading(false);
   };
@@ -452,14 +471,12 @@ export default function DashboardPage() {
     setLoadingAlternatives(false);
   };
 
-  // NOU: Funcție pentru a înlocui masa cu o alternativă selectată
   const handleSelectAlternative = async (selectedMeal) => {
     if (activeMealIndex === null || !currentPlan) return;
 
     const newMealsArray = currentPlan.plan.map((meal, index) =>
       index === activeMealIndex ? selectedMeal : meal
     );
-
     const newTotals = newMealsArray.reduce(
       (acc, meal) => {
         acc.calories += meal.total_calories;
@@ -470,16 +487,15 @@ export default function DashboardPage() {
       },
       { calories: 0, protein: 0, carbs: 0, fats: 0 }
     );
-
-    const newPlanState = {
-      plan: newMealsArray,
-      totals: newTotals,
-    };
+    const newPlanState = { plan: newMealsArray, totals: newTotals };
 
     setCurrentPlan(newPlanState);
     const dateString = getFormattedDate(currentDate);
     await savePlan(profile.id, dateString, newPlanState);
+
+    // Actualizează ambele hărți
     setWeeklyPlans((prev) => new Map(prev).set(dateString, newPlanState));
+    setAllFetchedPlans((prev) => new Map(prev).set(dateString, newPlanState));
 
     setIsSwapDialogOpen(false);
     setActiveMealIndex(null);
