@@ -3,9 +3,9 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { Input } from "./input";
-import { CheckCircle, XCircle } from "lucide-react"; // Importăm iconițele
+import { CheckCircle, XCircle } from "lucide-react";
 
-// Am adăugat `validationState` ca prop
+// Am eliminat `passwordStrength` din props
 export const FloatingLabelInput = ({
   id,
   label,
@@ -35,12 +35,9 @@ export const FloatingLabelInput = ({
       <Input
         id={id}
         value={value}
-        // Adăugăm padding în dreapta pentru a face loc iconiței
         className="p-6 pr-12 text-lg bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 focus-visible:ring-blue-500 focus-visible:border-blue-500"
         {...props}
       />
-
-      {/* --- NOU: Container pentru Iconița de Validare --- */}
       <div className="absolute inset-y-0 right-4 flex items-center">
         <AnimatePresence mode="wait">
           {validationState === "valid" && (
@@ -67,6 +64,7 @@ export const FloatingLabelInput = ({
           )}
         </AnimatePresence>
       </div>
+      {/* Am șters complet bara de progres de aici */}
     </div>
   );
 };

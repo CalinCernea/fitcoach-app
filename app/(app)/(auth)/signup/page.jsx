@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { motion, AnimatePresence } from "framer-motion";
-import { CheckCircle, Sparkles, Loader2 } from "lucide-react";
+import { CheckCircle, Sparkles, Loader2, XCircle } from "lucide-react";
 import { FloatingLabelInput } from "@/components/ui/FloatingLabelInput";
 
 export default function SignUpPage() {
@@ -19,29 +19,45 @@ export default function SignUpPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [userName, setUserName] = useState("");
+
   const [emailTouched, setEmailTouched] = useState(false);
   const [passwordTouched, setPasswordTouched] = useState(false);
 
   const emailValidationState = useMemo(() => {
-    if (!emailTouched) return null; // Nu valida dacă nu a fost atins
+    if (!emailTouched) return null;
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email) ? "valid" : "invalid";
   }, [email, emailTouched]);
 
   const passwordValidationState = useMemo(() => {
-    if (!passwordTouched) return null; // Nu valida dacă nu a fost atins
+    if (!passwordTouched) return null;
     return password.length >= 6 ? "valid" : "invalid";
   }, [password, passwordTouched]);
 
-  // Preluăm numele utilizatorului din localStorage pentru a personaliza mesajul
+  const passwordStrength = useMemo(() => {
+    if (!passwordTouched || password.length === 0) return 0;
+    let score = 0;
+    if (password.length >= 8) score++;
+    if (/[A-Z]/.test(password) && /[a-z]/.test(password)) score++;
+    if (/[0-9]/.test(password) || /[^A-Za-z0-9]/.test(password)) score++;
+    if (score === 0 && password.length >= 6) return 1;
+    return score;
+  }, [password, passwordTouched]);
+
+  const strengthColors = {
+    0: "bg-transparent",
+    1: "bg-red-500",
+    2: "bg-yellow-500",
+    3: "bg-green-500",
+  };
+
   useEffect(() => {
     const sessionData = JSON.parse(localStorage.getItem("onboardingSession"));
     if (sessionData && sessionData.onboardingData.name) {
-      setUserName(sessionData.onboardingData.name.split(" ")[0]); // Luăm doar prenumele
+      setUserName(sessionData.onboardingData.name.split(" ")[0]);
     }
   }, []);
 
-  // Logica de sign-up rămâne neschimbată
   const handleSignUp = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -86,7 +102,6 @@ export default function SignUpPage() {
         transition={{ duration: 0.6, ease: "easeOut" }}
         className="w-full max-w-md mx-auto"
       >
-        {/* Antetul de Succes */}
         <div className="text-center mb-8">
           <CheckCircle className="h-16 w-16 mx-auto text-green-500" />
           <h1 className="text-3xl md:text-4xl font-bold mt-4">
@@ -98,7 +113,6 @@ export default function SignUpPage() {
           </p>
         </div>
 
-        {/* Formularul Stilizat */}
         <form onSubmit={handleSignUp} className="space-y-6">
           <FloatingLabelInput
             id="email"
@@ -110,19 +124,31 @@ export default function SignUpPage() {
             onBlur={() => setEmailTouched(true)}
             validationState={emailValidationState}
           />
-          <FloatingLabelInput
-            id="password"
-            label="Password"
-            type="password"
-            required
-            minLength="6"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            onBlur={() => setPasswordTouched(true)}
-            validationState={passwordValidationState}
-          />
 
-          {/* Afișare Eroare cu Animație */}
+          <div className="space-y-1">
+            <FloatingLabelInput
+              id="password"
+              label="Password"
+              type="password"
+              required
+              minLength="6"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onBlur={() => setPasswordTouched(true)}
+              validationState={passwordValidationState}
+            />
+            <div className="h-1 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 mx-1">
+              <motion.div
+                className={`h-full ${
+                  strengthColors[passwordStrength] || "bg-transparent"
+                }`}
+                initial={{ width: "0%" }}
+                animate={{ width: `${(passwordStrength / 3) * 100}%` }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+              />
+            </div>
+          </div>
+
           <AnimatePresence>
             {error && (
               <motion.p
@@ -136,7 +162,6 @@ export default function SignUpPage() {
             )}
           </AnimatePresence>
 
-          {/* Buton Principal */}
           <Button
             type="submit"
             size="lg"
@@ -154,7 +179,6 @@ export default function SignUpPage() {
           </Button>
         </form>
 
-        {/* Link către Login */}
         <p className="mt-8 text-center text-sm text-slate-500 dark:text-slate-400">
           Already have an account?{" "}
           <Link
