@@ -28,7 +28,7 @@
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
-    --radius: 0.5rem
+    --radius: 0.5rem;
   }
   .dark {
     --background: 222.2 84% 4.9%;
@@ -54,7 +54,7 @@
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%
+    --chart-5: 340 75% 55%;
   }
 }
 
@@ -65,4 +65,40 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+@keyframes gradient-animation {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animated-gradient-background {
+  background: linear-gradient(
+    -45deg,
+    #e0e7ff,
+    /* Indigo-100 */ #dbeafe,
+    /* Blue-100 */ #e0f2fe,
+    /* Sky-100 */ #d1fae5 /* Green-100 */
+  );
+  background-size: 400% 400%;
+  animation: gradient-animation 15s ease infinite;
+}
+
+/* Pentru Dark Mode */
+.dark .animated-gradient-background {
+  background: linear-gradient(
+    -45deg,
+    #1e1b4b,
+    /* Indigo-950 */ #1e3a8a,
+    /* Blue-900 */ #0c4a6e,
+    /* Sky-900 */ #064e3b /* Green-900 */
+  );
+  background-size: 400% 400%;
+  animation: gradient-animation 15s ease infinite;
 }
