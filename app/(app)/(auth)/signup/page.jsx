@@ -1,20 +1,16 @@
 // app/(app)/(auth)/signup/page.jsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/utils/supabase";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { motion, AnimatePresence } from "framer-motion";
+import { CheckCircle, Sparkles, Loader2 } from "lucide-react";
+import { FloatingLabelInput } from "@/components/ui/FloatingLabelInput";
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -22,40 +18,38 @@ export default function SignUpPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [userName, setUserName] = useState("");
 
+  // Preluăm numele utilizatorului din localStorage pentru a personaliza mesajul
+  useEffect(() => {
+    const sessionData = JSON.parse(localStorage.getItem("onboardingSession"));
+    if (sessionData && sessionData.onboardingData.name) {
+      setUserName(sessionData.onboardingData.name.split(" ")[0]); // Luăm doar prenumele
+    }
+  }, []);
+
+  // Logica de sign-up rămâne neschimbată
   const handleSignUp = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
-
-    // 1. Creează contul în Supabase Auth
     const {
       data: { user },
       error: authError,
-    } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-
+    } = await supabase.auth.signUp({ email, password });
     if (authError) {
       setError(authError.message);
       setLoading(false);
       return;
     }
-
     if (user) {
-      // 2. Preluăm datele din localStorage
       const sessionData = JSON.parse(localStorage.getItem("onboardingSession"));
-
       if (sessionData) {
-        // 3. Salvăm datele de profil în baza de date Supabase
-        // (Vom crea tabelul 'profiles' în pasul următor)
         const { error: profileError } = await supabase.from("profiles").insert({
-          id: user.id, // Legătura cu utilizatorul autentificat
+          id: user.id,
           ...sessionData.onboardingData,
           ...sessionData.planResults,
         });
-
         if (profileError) {
           setError(
             `Account created, but failed to save profile: ${profileError.message}`
@@ -63,61 +57,97 @@ export default function SignUpPage() {
           setLoading(false);
           return;
         }
-
-        // 4. Curățăm localStorage și redirecționăm
         localStorage.removeItem("onboardingSession");
-        router.push("/dashboard"); // Redirecționăm către dashboard
+        router.push("/dashboard");
       } else {
-        // Dacă nu există date de onboarding, doar redirecționăm
         router.push("/dashboard");
       }
     }
   };
 
   return (
-    <Card className="w-full max-w-sm">
-      <CardHeader>
-        <CardTitle className="text-2xl">Create an Account</CardTitle>
-        <CardDescription>
-          You're one step away from your personalized plan.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSignUp} className="grid gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="m@example.com"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              required
-              minLength="6"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-          {error && <p className="text-red-500 text-sm">{error}</p>}
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Creating Account..." : "Sign Up"}
+    <div className="w-full min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
+        className="w-full max-w-md mx-auto"
+      >
+        {/* Antetul de Succes */}
+        <div className="text-center mb-8">
+          <CheckCircle className="h-16 w-16 mx-auto text-green-500" />
+          <h1 className="text-3xl md:text-4xl font-bold mt-4">
+            Your Blueprint is Ready, {userName || "friend"}!
+          </h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-2">
+            Just one final step. Create your account to unlock your personalized
+            plan.
+          </p>
+        </div>
+
+        {/* Formularul Stilizat */}
+        <form onSubmit={handleSignUp} className="space-y-6">
+          <FloatingLabelInput
+            id="email"
+            label="Email Address"
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <FloatingLabelInput
+            id="password"
+            label="Password"
+            type="password"
+            required
+            minLength="6"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+
+          {/* Afișare Eroare cu Animație */}
+          <AnimatePresence>
+            {error && (
+              <motion.p
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="text-red-500 text-sm text-center"
+              >
+                {error}
+              </motion.p>
+            )}
+          </AnimatePresence>
+
+          {/* Buton Principal */}
+          <Button
+            type="submit"
+            size="lg"
+            className="w-full text-lg p-6 bg-blue-600 hover:bg-blue-700"
+            disabled={loading}
+          >
+            {loading ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <>
+                <Sparkles className="mr-2 h-5 w-5" />
+                Unlock My Plan
+              </>
+            )}
           </Button>
         </form>
-        <div className="mt-4 text-center text-sm">
+
+        {/* Link către Login */}
+        <p className="mt-8 text-center text-sm text-slate-500 dark:text-slate-400">
           Already have an account?{" "}
-          <Link href="/login" className="underline">
-            Log in
+          <Link
+            href="/login"
+            className="font-semibold text-blue-500 hover:underline"
+          >
+            Log In
           </Link>
-        </div>
-      </CardContent>
-    </Card>
+        </p>
+      </motion.div>
+    </div>
   );
 }
