@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/utils/supabase";
-import { Button } from "@/components/ui/button";
+import { MagicButton } from "@/components/ui/MagicButton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { motion, AnimatePresence } from "framer-motion";
@@ -162,7 +162,7 @@ export default function SignUpPage() {
             )}
           </AnimatePresence>
 
-          <Button
+          <MagicButton
             type="submit"
             size="lg"
             className="w-full text-lg p-6 bg-blue-600 hover:bg-blue-700"
@@ -176,7 +176,7 @@ export default function SignUpPage() {
                 Unlock My Plan
               </>
             )}
-          </Button>
+          </MagicButton>
         </form>
 
         <p className="mt-8 text-center text-sm text-slate-500 dark:text-slate-400">
