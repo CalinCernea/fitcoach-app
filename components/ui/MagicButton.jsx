@@ -3,10 +3,11 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Button } from "./button"; // Importăm butonul de bază
+import { Button } from "./button";
 
-export const MagicButton = ({ children, ...props }) => {
+export const MagicButton = ({ children, onClick, ...props }) => {
   const [ripple, setRipple] = useState(null);
+  const [isWiping, setIsWiping] = useState(false);
 
   const handleClick = (e) => {
     const button = e.currentTarget;
@@ -17,47 +18,58 @@ export const MagicButton = ({ children, ...props }) => {
 
     setRipple({ x, y, size });
 
-    // Apelăm funcția onClick originală, dacă există
-    if (props.onClick) {
-      props.onClick(e);
+    // Dacă butonul este de tip "submit", pornim animația de wipe
+    if (props.type === "submit") {
+      setIsWiping(true);
+    }
+
+    if (onClick) {
+      onClick(e);
     }
   };
 
-  const handleAnimationComplete = () => {
-    setRipple(null);
-  };
-
   return (
-    <Button
-      {...props}
-      onClick={handleClick}
-      className={`relative overflow-hidden ${props.className || ""}`}
-    >
-      {/* Conținutul original al butonului */}
-      {children}
+    <>
+      <Button
+        {...props}
+        onClick={handleClick}
+        className={`relative overflow-hidden ${props.className || ""}`}
+      >
+        {children}
+        <AnimatePresence>
+          {ripple && (
+            <motion.span
+              key="ripple"
+              initial={{ scale: 0, opacity: 0.5 }}
+              animate={{ scale: 4, opacity: 0 }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+              onAnimationComplete={() => setRipple(null)}
+              style={{
+                position: "absolute",
+                left: ripple.x,
+                top: ripple.y,
+                width: ripple.size,
+                height: ripple.size,
+                borderRadius: "50%",
+                backgroundColor: "rgba(255, 255, 255, 0.3)",
+              }}
+            />
+          )}
+        </AnimatePresence>
+      </Button>
 
-      {/* Efectul de Ripple */}
+      {/* Animația de Wipe care pornește de la buton */}
       <AnimatePresence>
-        {ripple && (
-          <motion.span
-            key="ripple"
-            initial={{ scale: 0, opacity: 0.5 }}
-            animate={{ scale: 4, opacity: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.6, ease: "easeOut" }}
-            onAnimationComplete={handleAnimationComplete}
-            style={{
-              position: "absolute",
-              left: ripple.x,
-              top: ripple.y,
-              width: ripple.size,
-              height: ripple.size,
-              borderRadius: "50%",
-              backgroundColor: "rgba(255, 255, 255, 0.3)", // Culoarea efectului
-            }}
+        {isWiping && (
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 150 }} // Un număr mare pentru a acoperi ecranul
+            transition={{ duration: 0.8, ease: "easeIn" }}
+            className="fixed top-1/2 left-1/2 w-16 h-16 bg-blue-600 rounded-full z-50"
+            style={{ x: "-50%", y: "-50%" }}
           />
         )}
       </AnimatePresence>
-    </Button>
+    </>
   );
 };

@@ -68,6 +68,7 @@ import { TodaysMission } from "@/components/TodaysMission";
 import { MacroTracker } from "@/components/MacroTracker";
 import { WeeklyOverviewWidget } from "@/components/WeeklyOverviewWidget";
 import { MealDetailDialog } from "@/components/MealDetailDialog";
+import { motion, AnimatePresence } from "framer-motion";
 
 // Helper Functions
 const getFormattedDate = (date) => date.toISOString().split("T")[0];
@@ -163,6 +164,17 @@ export default function DashboardPage() {
   const [activeMealIndex, setActiveMealIndex] = useState(null);
   const [isMealDetailOpen, setIsMealDetailOpen] = useState(false);
   const [selectedMeal, setSelectedMeal] = useState(null);
+  const [playEntryAnimation, setPlayEntryAnimation] = useState(false);
+
+  useEffect(() => {
+    const shouldPlay = localStorage.getItem("playWipeTransition");
+    if (shouldPlay === "true") {
+      // Setăm starea pe true pentru a declanșa AnimatePresence
+      setPlayEntryAnimation(true);
+      // Curățăm flag-ul
+      localStorage.removeItem("playWipeTransition");
+    }
+  }, []);
 
   const getPrepStatusForDate = useCallback(
     (date) => {
@@ -579,227 +591,245 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="w-full max-w-6xl mx-auto p-4 md:p-6">
-      <Suspense fallback={null}>
-        <RefreshHandler
-          profile={profile}
-          isRegenerating={isRegenerating}
-          onRegenerateAll={regenerateAllPlans}
-        />
-      </Suspense>
-
-      {/* ================= HEADER (PĂSTRAT) ================= */}
-      <header className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold">
-            Welcome, {profile.name || "User"}!
-          </h1>
-          <p className="text-slate-500">Your command center is ready.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" asChild>
-            <Link href="/prep-mode">
-              <ChefHat className="mr-2 h-4 w-4" />
-              Prep Mode
-            </Link>
-          </Button>
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="outline">
-                <ShoppingCart className="mr-2 h-4 w-4" />
-                Shopping List
-              </Button>
-            </SheetTrigger>
-            <SheetContent className="flex flex-col">
-              <SheetHeader>
-                <SheetTitle>Your Shopping List</SheetTitle>
-                <SheetDescription>
-                  Aggregated ingredients for the selected period.
-                </SheetDescription>
-              </SheetHeader>
-              <div className="py-4">
-                <div className="flex justify-center gap-2 mb-4">
-                  <Button
-                    variant={shoppingListPeriod === 3 ? "default" : "outline"}
-                    onClick={() => setShoppingListPeriod(3)}
-                  >
-                    Next 3 Days
-                  </Button>
-                  <Button
-                    variant={shoppingListPeriod === 7 ? "default" : "outline"}
-                    onClick={() => setShoppingListPeriod(7)}
-                  >
-                    Next 7 Days
-                  </Button>
-                </div>
-              </div>
-              <div className="flex-grow overflow-y-auto">
-                <ul className="space-y-2 pr-4">
-                  {Object.entries(shoppingList).map(([name, amount]) => (
-                    <li
-                      key={name}
-                      className="flex justify-between items-center p-2 rounded-md bg-slate-100 dark:bg-slate-800"
-                    >
-                      <span className="font-medium">{name}</span>
-                      <span className="font-mono text-slate-500">
-                        {Math.round(amount)}g
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </SheetContent>
-          </Sheet>
-          <Button variant="outline" size="icon" asChild>
-            <Link href="/profile">
-              <User className="h-4 w-4" />
-              <span className="sr-only">Profile</span>
-            </Link>
-          </Button>
-          <Button variant="ghost" onClick={handleLogout}>
-            <LogOut className="mr-2 h-4 w-4" /> Logout
-          </Button>
-        </div>
-      </header>
-
-      {/* ================= NOTIFICARE PREP MODE (PĂSTRATĂ) ================= */}
-      {preppedComponents && (
-        <Card className="mb-6 border-green-500 bg-green-50 dark:bg-green-900/20">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-green-600" />
-              <p className="text-green-700 dark:text-green-400 font-medium">
-                Prep Mode Active! Your meals are using prepped components.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ================= NOUL GRID 2x2 "COMMAND CENTER" ================= */}
-      {!currentPlan ? (
-        <div className="flex items-center justify-center h-96">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* --- WIDGET 1: TODAY'S MISSION --- */}
-          <TodaysMission
+    // --- NOU: Container exterior relativ ---
+    <div className="relative w-full">
+      {/* Conținutul tău existent este acum în interiorul acestui div */}
+      <div className="w-full max-w-6xl mx-auto p-4 md:p-6">
+        <Suspense fallback={null}>
+          <RefreshHandler
             profile={profile}
-            plan={currentPlan}
-            onViewMeal={(meal) => {
-              setSelectedMeal(meal);
-              setIsMealDetailOpen(true);
-            }}
-            onToggleMealConsumed={handleToggleMealConsumed}
+            isRegenerating={isRegenerating}
+            onRegenerateAll={regenerateAllPlans}
           />
+        </Suspense>
 
-          {/* --- WIDGET 2: MACRO TRACKER --- */}
-          <MacroTracker profile={profile} plan={currentPlan} />
-
-          {/* --- WIDGET 3: WEEKLY OVERVIEW --- */}
-          <WeeklyOverviewWidget
-            plans={weeklyPlans}
-            currentDate={currentDate}
-            startOfWeek={startOfWeek}
-            onDaySelect={handleDaySelect}
-            changeWeek={changeWeek}
-          />
-
-          {/* --- WIDGET 4: SMART WATER TRACKER --- */}
-          <WaterTracker
-            userId={profile.id}
-            dailyTarget={profile.daily_water_target || 2500}
-          />
-        </div>
-      )}
-
-      {/* ================= DIALOGURI (RĂMÂN LA FINAL) ================= */}
-      <MealDetailDialog
-        meal={selectedMeal}
-        isOpen={isMealDetailOpen}
-        onOpenChange={setIsMealDetailOpen}
-        onSwap={() => {
-          const mealIndex = currentPlan.plan.findIndex(
-            (m) => m.id === selectedMeal.id
-          );
-          if (mealIndex !== -1) {
-            setIsMealDetailOpen(false);
-            // Așteaptă puțin ca primul dialog să se închidă
-            setTimeout(() => handleOpenSwapDialog(mealIndex), 150);
-          }
-        }}
-      />
-
-      <Dialog open={isSwapDialogOpen} onOpenChange={setIsSwapDialogOpen}>
-        <DialogContent className="sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle className="text-2xl">
-              Choose an Alternative
-            </DialogTitle>
-            <DialogDescription>
-              Select a meal that fits your taste. Macros are similar.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-2 max-h-[70vh] overflow-y-auto pr-3">
-            {loadingAlternatives ? (
-              <div className="flex flex-col justify-center items-center h-60 gap-3">
-                <RefreshCw className="h-8 w-8 animate-spin text-blue-500" />
-                <p className="text-slate-500">Finding tasty alternatives...</p>
-              </div>
-            ) : mealAlternatives.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {mealAlternatives.map((altMeal, altIndex) => (
-                  <div
-                    key={altIndex}
-                    style={{ animationDelay: `${altIndex * 100}ms` }}
-                    className="animate-in fade-in slide-in-from-bottom-5 group relative flex flex-col rounded-xl border bg-white dark:bg-slate-900 overflow-hidden transition-all hover:shadow-lg hover:-translate-y-1"
-                  >
-                    <div className="h-40 bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                      {altMeal.imageUrl ? (
-                        <img
-                          src={altMeal.imageUrl}
-                          alt={altMeal.name}
-                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                        />
-                      ) : (
-                        <div className="flex items-center justify-center h-full">
-                          <UtensilsCrossed className="h-12 w-12 text-slate-300 dark:text-slate-600" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-4 flex flex-col flex-grow">
-                      <h3 className="font-bold text-lg mb-2">{altMeal.name}</h3>
-                      <div className="text-xs text-slate-500 dark:text-slate-400 flex-grow">
-                        <p>
-                          {Math.round(altMeal.total_calories)} kcal &bull; P:{" "}
-                          {Math.round(altMeal.total_protein)}g &bull; C:{" "}
-                          {Math.round(altMeal.total_carbs)}g &bull; F:{" "}
-                          {Math.round(altMeal.total_fats)}g
-                        </p>
-                      </div>
-                      <Button
-                        className="mt-4 w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold"
-                        onClick={() => handleSelectAlternative(altMeal)}
-                      >
-                        <CheckCircle className="mr-2 h-4 w-4" />
-                        Select this Meal
-                      </Button>
-                    </div>
+        <header className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold">
+              Welcome, {profile.name || "User"}!
+            </h1>
+            <p className="text-slate-500">Your command center is ready.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" asChild>
+              <Link href="/prep-mode">
+                <ChefHat className="mr-2 h-4 w-4" />
+                Prep Mode
+              </Link>
+            </Button>
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline">
+                  <ShoppingCart className="mr-2 h-4 w-4" />
+                  Shopping List
+                </Button>
+              </SheetTrigger>
+              <SheetContent className="flex flex-col">
+                <SheetHeader>
+                  <SheetTitle>Your Shopping List</SheetTitle>
+                  <SheetDescription>
+                    Aggregated ingredients for the selected period.
+                  </SheetDescription>
+                </SheetHeader>
+                <div className="py-4">
+                  <div className="flex justify-center gap-2 mb-4">
+                    <Button
+                      variant={shoppingListPeriod === 3 ? "default" : "outline"}
+                      onClick={() => setShoppingListPeriod(3)}
+                    >
+                      Next 3 Days
+                    </Button>
+                    <Button
+                      variant={shoppingListPeriod === 7 ? "default" : "outline"}
+                      onClick={() => setShoppingListPeriod(7)}
+                    >
+                      Next 7 Days
+                    </Button>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center text-slate-500 py-16">
-                <p className="font-semibold text-lg">No alternatives found</p>
-                <p className="text-sm mt-1">
-                  Try regenerating the entire day for a fresh set of meals.
+                </div>
+                <div className="flex-grow overflow-y-auto">
+                  <ul className="space-y-2 pr-4">
+                    {Object.entries(shoppingList).map(([name, amount]) => (
+                      <li
+                        key={name}
+                        className="flex justify-between items-center p-2 rounded-md bg-slate-100 dark:bg-slate-800"
+                      >
+                        <span className="font-medium">{name}</span>
+                        <span className="font-mono text-slate-500">
+                          {Math.round(amount)}g
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </SheetContent>
+            </Sheet>
+            <Button variant="outline" size="icon" asChild>
+              <Link href="/profile">
+                <User className="h-4 w-4" />
+                <span className="sr-only">Profile</span>
+              </Link>
+            </Button>
+            <Button variant="ghost" onClick={handleLogout}>
+              <LogOut className="mr-2 h-4 w-4" /> Logout
+            </Button>
+          </div>
+        </header>
+
+        {preppedComponents && (
+          <Card className="mb-6 border-green-500 bg-green-50 dark:bg-green-900/20">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-green-600" />
+                <p className="text-green-700 dark:text-green-400 font-medium">
+                  Prep Mode Active! Your meals are using prepped components.
                 </p>
               </div>
-            )}
+            </CardContent>
+          </Card>
+        )}
+
+        {!currentPlan ? (
+          <div className="flex items-center justify-center h-96">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
           </div>
-        </DialogContent>
-      </Dialog>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <TodaysMission
+              profile={profile}
+              plan={currentPlan}
+              onViewMeal={(meal) => {
+                setSelectedMeal(meal);
+                setIsMealDetailOpen(true);
+              }}
+              onToggleMealConsumed={handleToggleMealConsumed}
+            />
+            <MacroTracker profile={profile} plan={currentPlan} />
+            <WeeklyOverviewWidget
+              plans={weeklyPlans}
+              currentDate={currentDate}
+              startOfWeek={startOfWeek}
+              onDaySelect={handleDaySelect}
+              changeWeek={changeWeek}
+            />
+            <WaterTracker
+              userId={profile.id}
+              dailyTarget={profile.daily_water_target || 2500}
+            />
+          </div>
+        )}
+
+        <MealDetailDialog
+          meal={selectedMeal}
+          isOpen={isMealDetailOpen}
+          onOpenChange={setIsMealDetailOpen}
+          onSwap={() => {
+            const mealIndex = currentPlan.plan.findIndex(
+              (m) => m.id === selectedMeal.id
+            );
+            if (mealIndex !== -1) {
+              setIsMealDetailOpen(false);
+              setTimeout(() => handleOpenSwapDialog(mealIndex), 150);
+            }
+          }}
+        />
+
+        <Dialog open={isSwapDialogOpen} onOpenChange={setIsSwapDialogOpen}>
+          <DialogContent className="sm:max-w-3xl">
+            <DialogHeader>
+              <DialogTitle className="text-2xl">
+                Choose an Alternative
+              </DialogTitle>
+              <DialogDescription>
+                Select a meal that fits your taste. Macros are similar.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-2 max-h-[70vh] overflow-y-auto pr-3">
+              {loadingAlternatives ? (
+                <div className="flex flex-col justify-center items-center h-60 gap-3">
+                  <RefreshCw className="h-8 w-8 animate-spin text-blue-500" />
+                  <p className="text-slate-500">
+                    Finding tasty alternatives...
+                  </p>
+                </div>
+              ) : mealAlternatives.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {mealAlternatives.map((altMeal, altIndex) => (
+                    <div
+                      key={altIndex}
+                      style={{ animationDelay: `${altIndex * 100}ms` }}
+                      className="animate-in fade-in slide-in-from-bottom-5 group relative flex flex-col rounded-xl border bg-white dark:bg-slate-900 overflow-hidden transition-all hover:shadow-lg hover:-translate-y-1"
+                    >
+                      <div className="h-40 bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                        {altMeal.imageUrl ? (
+                          <img
+                            src={altMeal.imageUrl}
+                            alt={altMeal.name}
+                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          />
+                        ) : (
+                          <div className="flex items-center justify-center h-full">
+                            <UtensilsCrossed className="h-12 w-12 text-slate-300 dark:text-slate-600" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-4 flex flex-col flex-grow">
+                        <h3 className="font-bold text-lg mb-2">
+                          {altMeal.name}
+                        </h3>
+                        <div className="text-xs text-slate-500 dark:text-slate-400 flex-grow">
+                          <p>
+                            {Math.round(altMeal.total_calories)} kcal &bull; P:{" "}
+                            {Math.round(altMeal.total_protein)}g &bull; C:{" "}
+                            {Math.round(altMeal.total_carbs)}g &bull; F:{" "}
+                            {Math.round(altMeal.total_fats)}g
+                          </p>
+                        </div>
+                        <Button
+                          className="mt-4 w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold"
+                          onClick={() => handleSelectAlternative(altMeal)}
+                        >
+                          <CheckCircle className="mr-2 h-4 w-4" />
+                          Select this Meal
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center text-slate-500 py-16">
+                  <p className="font-semibold text-lg">No alternatives found</p>
+                  <p className="text-sm mt-1">
+                    Try regenerating the entire day for a fresh set of meals.
+                  </p>
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* --- NOU: Elementul pentru Animația "Wipe" de Intrare --- */}
+      <AnimatePresence
+        // Când animația de ieșire se termină, setăm starea înapoi pe false
+        // pentru a curăța DOM-ul și a fi pregătiți pentru o viitoare animație.
+        onExitComplete={() => setPlayEntryAnimation(false)}
+      >
+        {playEntryAnimation && (
+          <motion.div
+            // Starea inițială: un cerc mare care umple ecranul
+            initial={{ clipPath: "circle(150% at 50% 50%)" }}
+            // Starea animată: un cerc care se strânge la 0%
+            animate={{ clipPath: "circle(0% at 50% 50%)" }}
+            // Starea de ieșire (când este eliminat din DOM)
+            exit={{ clipPath: "circle(0% at 50% 50%)" }}
+            // Durata și tipul animației
+            transition={{ duration: 0.8, ease: "circOut" }}
+            // Poziționare fixă pentru a acoperi tot ecranul
+            className="fixed inset-0 bg-blue-600 z-50"
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
