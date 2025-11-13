@@ -2,23 +2,22 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { Input } from "./input"; // Importăm componenta de bază de la shadcn
+import { Input } from "./input";
+import { CheckCircle, XCircle } from "lucide-react"; // Importăm iconițele
 
-export const FloatingLabelInput = ({ id, label, value, ...props }) => {
+// Am adăugat `validationState` ca prop
+export const FloatingLabelInput = ({
+  id,
+  label,
+  value,
+  validationState,
+  ...props
+}) => {
   const isFloating = value && value.length > 0;
 
   const labelVariants = {
-    initial: {
-      top: "50%",
-      y: "-50%",
-      fontSize: "1.125rem", // text-lg
-    },
-    float: {
-      top: "0.5rem", // 8px
-      y: "0%",
-      fontSize: "0.75rem", // text-xs
-      color: "#3b82f6", // text-blue-500
-    },
+    initial: { top: "50%", y: "-50%", fontSize: "1.125rem" },
+    float: { top: "0.5rem", y: "0%", fontSize: "0.75rem", color: "#3b82f6" },
   };
 
   return (
@@ -36,9 +35,38 @@ export const FloatingLabelInput = ({ id, label, value, ...props }) => {
       <Input
         id={id}
         value={value}
-        className="p-6 text-lg bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 focus-visible:ring-blue-500 focus-visible:border-blue-500"
+        // Adăugăm padding în dreapta pentru a face loc iconiței
+        className="p-6 pr-12 text-lg bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-800 focus-visible:ring-blue-500 focus-visible:border-blue-500"
         {...props}
       />
+
+      {/* --- NOU: Container pentru Iconița de Validare --- */}
+      <div className="absolute inset-y-0 right-4 flex items-center">
+        <AnimatePresence mode="wait">
+          {validationState === "valid" && (
+            <motion.div
+              key="valid"
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.5, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <CheckCircle className="h-5 w-5 text-green-500" />
+            </motion.div>
+          )}
+          {validationState === "invalid" && (
+            <motion.div
+              key="invalid"
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.5, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <XCircle className="h-5 w-5 text-red-500" />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 };

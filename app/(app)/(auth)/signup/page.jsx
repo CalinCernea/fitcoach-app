@@ -1,7 +1,7 @@
 // app/(app)/(auth)/signup/page.jsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/utils/supabase";
@@ -19,6 +19,19 @@ export default function SignUpPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [userName, setUserName] = useState("");
+  const [emailTouched, setEmailTouched] = useState(false);
+  const [passwordTouched, setPasswordTouched] = useState(false);
+
+  const emailValidationState = useMemo(() => {
+    if (!emailTouched) return null; // Nu valida dacă nu a fost atins
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email) ? "valid" : "invalid";
+  }, [email, emailTouched]);
+
+  const passwordValidationState = useMemo(() => {
+    if (!passwordTouched) return null; // Nu valida dacă nu a fost atins
+    return password.length >= 6 ? "valid" : "invalid";
+  }, [password, passwordTouched]);
 
   // Preluăm numele utilizatorului din localStorage pentru a personaliza mesajul
   useEffect(() => {
@@ -94,6 +107,8 @@ export default function SignUpPage() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            onBlur={() => setEmailTouched(true)}
+            validationState={emailValidationState}
           />
           <FloatingLabelInput
             id="password"
@@ -103,6 +118,8 @@ export default function SignUpPage() {
             minLength="6"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            onBlur={() => setPasswordTouched(true)}
+            validationState={passwordValidationState}
           />
 
           {/* Afișare Eroare cu Animație */}
