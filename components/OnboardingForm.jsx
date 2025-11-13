@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Silhouette } from "./icons/Silhouette";
+import { Player } from "@lottiefiles/react-lottie-player";
 import {
   AnimatePresence,
   motion,
@@ -154,9 +155,9 @@ export function OnboardingForm() {
   };
 
   return (
-    <div className="w-full h-screen overflow-hidden flex flex-col justify-center items-center p-4 bg-slate-50 dark:bg-slate-950 transition-colors duration-500">
-      <div className="w-full max-w-3xl">
-        {/* Header cu progres și butoane */}
+    <div className="w-full h-screen overflow-hidden flex flex-col p-4 bg-slate-50 dark:bg-slate-950 transition-colors duration-500">
+      {/* ================== HEADER FIX ================== */}
+      <header className="flex-shrink-0">
         <div className="flex justify-between items-center mb-4">
           <Button
             variant="ghost"
@@ -183,27 +184,32 @@ export function OnboardingForm() {
           <Button
             variant="ghost"
             onClick={handleNext}
-            className={step >= totalSteps ? "invisible" : "visible"}
+            className={
+              // Butonul este ascuns doar la pasul de obiectiv (3) și la ultimul pas (6)
+              step === 3 || step >= totalSteps ? "invisible" : "visible"
+            }
           >
             Next <ArrowRight className="ml-2 w-4 h-4" />
           </Button>
         </div>
-        {/* Container principal pentru scene */}
+      </header>
+
+      {/* ================== CONTAINER DE CONȚINUT SCROLLABIL INTERN ================== */}
+      <main className="flex-grow relative overflow-y-auto flex flex-col justify-center">
         <LayoutGroup>
-          {" "}
-          {/* <-- ADAUGĂ TAG-UL DE DESCHIDERE AICI */}
-          <div className="relative h-[60vh] md:h-[50vh] flex items-center justify-center">
-            <AnimatePresence initial={false} custom={direction} mode="wait">
-              <motion.div
-                key={step}
-                custom={direction}
-                variants={variants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ type: "tween", ease: "circOut", duration: 0.5 }}
-                className="absolute w-full"
-              >
+          <AnimatePresence initial={false} custom={direction} mode="wait">
+            <motion.div
+              key={step}
+              custom={direction}
+              variants={variants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ type: "tween", ease: "circOut", duration: 0.5 }}
+              className="w-full px-2" // Am adăugat un mic padding orizontal
+            >
+              {/* Aici, am învelit fiecare scenă într-un div pentru a asigura centrarea corectă */}
+              <div className="max-w-3xl mx-auto flex flex-col justify-center min-h-[45vh]">
                 {step === 1 && (
                   <StepName
                     value={formData.name}
@@ -235,6 +241,7 @@ export function OnboardingForm() {
                   <StepActivity
                     value={formData.activity}
                     onChange={handleChange}
+                    onNext={handleNext}
                   />
                 )}
                 {step === 6 && (
@@ -244,24 +251,24 @@ export function OnboardingForm() {
                   />
                 )}
                 {step === totalSteps + 1 && <StepCalculating />}
-              </motion.div>
-            </AnimatePresence>
-          </div>
-        </LayoutGroup>{" "}
-        {/* <-- ADAUGĂ TAG-UL DE ÎNCHIDERE AICI */}
-        {/* Butonul de submit apare doar la ultimul pas */}
-        <div className="mt-8 text-center">
-          {step === totalSteps && (
-            <Button
-              size="lg"
-              onClick={handleSubmit}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              Build My Blueprint <Sparkles className="ml-2 w-4 h-4" />
-            </Button>
-          )}
-        </div>
-      </div>
+              </div>
+            </motion.div>
+          </AnimatePresence>
+        </LayoutGroup>
+      </main>
+
+      {/* ================== FOOTER FIX ================== */}
+      <footer className="flex-shrink-0 h-20 flex items-center justify-center">
+        {step === totalSteps && (
+          <Button
+            size="lg"
+            onClick={handleSubmit}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            Build My Blueprint <Sparkles className="ml-2 w-4 h-4" />
+          </Button>
+        )}
+      </footer>
     </div>
   );
 }
@@ -648,24 +655,52 @@ const StepWeeklyTarget = ({ formData, onChange }) => {
   );
 };
 
-const StepCalculating = () => (
-  <motion.div
-    initial={{ opacity: 0, scale: 0.8 }}
-    animate={{ opacity: 1, scale: 1 }}
-    transition={{ duration: 0.5 }}
-  >
-    <div className="text-center">
-      <div className="relative w-24 h-24 mx-auto mb-4">
-        <div className="absolute inset-0 border-4 border-slate-200 dark:border-slate-800 rounded-full"></div>
-        <div className="absolute inset-0 border-4 border-blue-500 rounded-full border-t-transparent animate-spin"></div>
+const StepCalculating = () => {
+  const [text, setText] = useState("Analyzing your stats...");
+
+  useEffect(() => {
+    const timeouts = [
+      setTimeout(() => setText("Calculating your needs..."), 800),
+      setTimeout(() => setText("Crafting your personal blueprint..."), 1600),
+    ];
+    return () => timeouts.forEach(clearTimeout);
+  }, []);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.5 }}
+      className="text-center flex flex-col items-center"
+    >
+      {/* --- MODIFICARE CHEIE AICI --- */}
+      <Player
+        autoplay
+        loop
+        // Folosim calea publică direct, ca un URL
+        src="/lottie/calculating.json"
+        style={{ height: "200px", width: "200px" }}
+      />
+
+      <h2 className="text-3xl font-bold mt-4">Building Your Blueprint</h2>
+
+      <div className="h-6 mt-2">
+        <AnimatePresence mode="wait">
+          <motion.p
+            key={text}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.3 }}
+            className="text-slate-500"
+          >
+            {text}
+          </motion.p>
+        </AnimatePresence>
       </div>
-      <h2 className="text-3xl font-bold">Building Your Blueprint...</h2>
-      <p className="text-slate-500 mt-2">
-        Analyzing data, calculating needs, crafting your plan.
-      </p>
-    </div>
-  </motion.div>
-);
+    </motion.div>
+  );
+};
 
 const InteractiveCard = ({ children, onClick, isSelected }) => {
   const ref = useRef(null);
