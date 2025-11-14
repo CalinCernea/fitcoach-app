@@ -53,10 +53,10 @@ export default function SignUpPage() {
   };
 
   useEffect(() => {
-    const sessionData = JSON.parse(localStorage.getItem("onboardingSession"));
-    if (sessionData && sessionData.onboardingData.name) {
-      setUserName(sessionData.onboardingData.name.split(" ")[0]);
-    }
+    document.body.classList.add("overflow-hidden");
+    return () => {
+      document.body.classList.remove("overflow-hidden");
+    };
   }, []);
 
   const handleSignUp = async (e) => {

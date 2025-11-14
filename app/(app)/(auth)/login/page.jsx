@@ -1,7 +1,7 @@
 // app/(app)/(auth)/login/page.jsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/utils/supabase";
@@ -16,6 +16,17 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // Când componenta se montează, adaugă clasa pe body
+    document.body.classList.add("overflow-hidden");
+
+    // Când componenta se demontează (utilizatorul navighează în altă parte),
+    // elimină clasa pentru a permite scroll-ul pe alte pagini (ex: dashboard).
+    return () => {
+      document.body.classList.remove("overflow-hidden");
+    };
+  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
