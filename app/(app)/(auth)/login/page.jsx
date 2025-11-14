@@ -5,16 +5,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/utils/supabase";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { motion, AnimatePresence } from "framer-motion";
+import { LogIn, Loader2 } from "lucide-react";
+import { FloatingLabelInput } from "@/components/ui/FloatingLabelInput";
+import { MagicButton } from "@/components/ui/MagicButton";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -37,54 +31,88 @@ export default function LoginPage() {
       setError(error.message);
       setLoading(false);
     } else {
-      router.push("/dashboard"); // Redirecționează la dashboard după login
-      router.refresh(); // Forțează un refresh pentru a actualiza starea de autentificare
+      // --- MODIFICARE PENTRU TRANZIȚIE ---
+      // Setăm flag-ul în localStorage și navigăm
+      localStorage.setItem("playWipeTransition", "true");
+      router.push("/dashboard");
     }
   };
 
   return (
-    <Card className="w-full max-w-sm">
-      <CardHeader>
-        <CardTitle className="text-2xl">Welcome Back</CardTitle>
-        <CardDescription>
-          Enter your email below to log in to your account.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleLogin} className="grid gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="m@example.com"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-          {error && <p className="text-red-500 text-sm">{error}</p>}
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Logging in..." : "Log In"}
-          </Button>
-        </form>
-        <div className="mt-4 text-center text-sm">
-          Don't have an account?{" "}
-          <Link href="/signup" className="underline">
-            Sign up
-          </Link>
+    <div className="w-full min-h-screen flex items-center justify-center p-4 bg-slate-50 dark:bg-slate-950">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
+        className="w-full max-w-md mx-auto"
+      >
+        <div className="text-center mb-8">
+          <LogIn className="h-16 w-16 mx-auto text-blue-500" />
+          <h1 className="text-3xl md:text-4xl font-bold mt-4">Welcome Back!</h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-2">
+            Log in to access your personalized command center.
+          </p>
         </div>
-      </CardContent>
-    </Card>
+
+        <form onSubmit={handleLogin} className="space-y-6">
+          <FloatingLabelInput
+            id="email"
+            label="Email Address"
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+
+          <FloatingLabelInput
+            id="password"
+            label="Password"
+            type="password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+
+          <AnimatePresence>
+            {error && (
+              <motion.p
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="text-red-500 text-sm text-center"
+              >
+                {error}
+              </motion.p>
+            )}
+          </AnimatePresence>
+
+          <MagicButton
+            type="submit"
+            size="lg"
+            className="w-full text-lg p-6 bg-blue-600 hover:bg-blue-700"
+            disabled={loading}
+          >
+            {loading ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <>
+                <LogIn className="mr-2 h-5 w-5" />
+                Log In
+              </>
+            )}
+          </MagicButton>
+        </form>
+
+        <p className="mt-8 text-center text-sm text-slate-500 dark:text-slate-400">
+          Don't have an account?{" "}
+          <Link
+            href="/signup"
+            className="font-semibold text-blue-500 hover:underline"
+          >
+            Sign Up
+          </Link>
+        </p>
+      </motion.div>
+    </div>
   );
 }
