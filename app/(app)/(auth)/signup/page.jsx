@@ -200,16 +200,6 @@ export default function SignUpPage() {
                 )}
               </MagicButton>
             </form>
-
-            <p className="mt-8 text-center text-sm text-slate-500 dark:text-slate-400">
-              Already have an account?{" "}
-              <Link
-                href="/login"
-                className="font-semibold text-blue-500 hover:underline"
-              >
-                Log In
-              </Link>
-            </p>
           </motion.div>
         </div>
 

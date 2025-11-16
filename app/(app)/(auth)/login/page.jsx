@@ -146,12 +146,12 @@ export default function LoginPage() {
         </form>
 
         <p className="mt-8 text-center text-sm text-slate-500 dark:text-slate-400">
-          Don't have an account?{" "}
+          First time?{" "}
           <Link
-            href="/signup"
+            href="/onboarding"
             className="font-semibold text-blue-500 hover:underline"
           >
-            Sign Up
+            Create your personalized plan
           </Link>
         </p>
       </motion.div>
