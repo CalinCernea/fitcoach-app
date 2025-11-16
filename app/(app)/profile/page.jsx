@@ -34,6 +34,8 @@ import {
 import { toast } from "sonner";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { FloatingLabelInput } from "@/components/ui/FloatingLabelInput"; // Refolosim componenta!
+import { Input } from "@/components/ui/input";
+
 import {
   LineChart,
   Line,
@@ -474,6 +476,7 @@ const SectionWrapper = ({ title, children }) => (
 
 const EditableField = ({ label, field, value, onChange, status, ...props }) => (
   <div className="space-y-2">
+    {/* Partea de sus cu eticheta și statusul rămâne la fel */}
     <div className="flex items-center justify-between h-6">
       <Label htmlFor={field} className="text-base">
         {label}
@@ -493,11 +496,14 @@ const EditableField = ({ label, field, value, onChange, status, ...props }) => (
         </motion.div>
       </AnimatePresence>
     </div>
-    <FloatingLabelInput
+
+    {/* Aici este înlocuirea: un Input simplu cu placeholder */}
+    <Input
       id={field}
-      label={label}
+      placeholder={label} // Folosim label-ul ca placeholder
       value={value || ""}
       onChange={(e) => onChange(field, e.target.value, label)}
+      className="h-14 text-base" // Am păstrat înălțimea pentru consistență vizuală
       {...props}
     />
   </div>
