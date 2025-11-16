@@ -1,6 +1,9 @@
 // utils/calorieCalculator.js
 
 export const calculateAdvancedMetrics = (data) => {
+  // --- LOG 1: Vezi cu ce date este apelată funcția ---
+  console.log("[Calculator] Primit date:", data);
+
   // Gardă de siguranță pentru a preveni erorile
   if (
     !data ||
@@ -61,11 +64,17 @@ export const calculateAdvancedMetrics = (data) => {
   const carbCalories = targetCalories - proteinCalories - fatCalories;
   const carbsGrams = carbCalories / 4;
 
-  return {
+  // Am creat o variabilă 'result' pentru a putea afișa rezultatul înainte de a-l returna
+  const result = {
     tdee: Math.round(tdee),
     targetCalories: Math.round(targetCalories),
     targetProtein: Math.round(proteinGrams),
     targetCarbs: Math.round(carbsGrams),
     targetFats: Math.round(fatGrams),
   };
+
+  // --- LOG 2: Vezi ce rezultat produce funcția ---
+  console.log("[Calculator] Rezultat produs:", result);
+
+  return result;
 };

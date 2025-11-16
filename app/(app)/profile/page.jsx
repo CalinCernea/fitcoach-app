@@ -7,18 +7,22 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/utils/supabase";
 import { calculateAdvancedMetrics } from "@/utils/calorieCalculator";
-import { ingredients } from "@/utils/recipeDatabase"; // MODIFICAT: Importăm ingredientele din recipeDatabase
+import { ingredients } from "@/utils/recipeDatabase";
+import { useDebouncedCallback } from "use-debounce";
 
-// UI Components
-import { Button } from "@/components/ui/button";
+// --- NOU: Importuri pentru UI și Animații ---
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+  User,
+  Target,
+  Heart,
+  Utensils,
+  Check,
+  Settings,
+  Loader2,
+  ArrowLeft,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -27,11 +31,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Save, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { MultiSelect } from "@/components/ui/multi-select";
-
-// --- NOU: Importăm componentele pentru grafic ---
+import { FloatingLabelInput } from "@/components/ui/FloatingLabelInput"; // Refolosim componenta!
 import {
   LineChart,
   Line,
@@ -39,19 +41,16 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
 } from "recharts";
 
-// --- MODIFICAT: Pregătim opțiunile pentru MultiSelect din ingredientele rețetelor ---
 const foodOptions = Object.entries(ingredients).map(([key, value]) => ({
-  value: key, // ID-ul ingredientului (ex: "chicken_breast", "eggs")
-  label: value.name, // Numele afișat (ex: "Chicken Breast", "Eggs")
+  value: key,
+  label: value.name,
 }));
 
-// --- Componenta de Loading ---
 const LoadingSpinner = () => (
-  <div className="flex items-center justify-center h-screen">
+  <div className="flex items-center justify-center h-screen bg-slate-50 dark:bg-slate-950">
     <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div>
   </div>
 );
@@ -59,15 +58,15 @@ const LoadingSpinner = () => (
 export default function ProfilePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
   const [profileData, setProfileData] = useState(null);
   const [error, setError] = useState("");
-
-  // --- Stări pentru jurnalul de greutate ---
   const [weightLog, setWeightLog] = useState([]);
   const [loadingLog, setLoadingLog] = useState(true);
 
-  // --- Funcție pentru a prelua jurnalul de greutate ---
+  // --- NOU: Stări pentru noul UI ---
+  const [activeTab, setActiveTab] = useState("details");
+  const [savingStatus, setSavingStatus] = useState({});
+
   const fetchWeightLog = useCallback(async (userId) => {
     setLoadingLog(true);
     const { data, error } = await supabase
@@ -78,7 +77,6 @@ export default function ProfilePage() {
 
     if (error) {
       toast.error("Could not load weight progress.");
-      console.error("Weight log fetch error:", error);
     } else {
       const formattedData = data.map((log) => ({
         date: new Date(log.created_at).toLocaleDateString("en-GB", {
@@ -93,7 +91,6 @@ export default function ProfilePage() {
   }, []);
 
   const fetchProfile = useCallback(async () => {
-    setLoading(true);
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -110,10 +107,10 @@ export default function ProfilePage() {
 
     if (error) {
       setError("Could not fetch your profile. Please try again.");
-      console.error("Profile fetch error:", error);
     } else {
       setProfileData({
         ...data,
+        gender: data.sex,
         liked_foods: data.liked_foods || [],
         disliked_foods: data.disliked_foods || [],
       });
@@ -126,284 +123,414 @@ export default function ProfilePage() {
     fetchProfile();
   }, [fetchProfile]);
 
-  const handleChange = (field, value) => {
-    setProfileData((prev) => ({ ...prev, [field]: value }));
-  };
+  // --- NOU: Logica de Salvare Automată ---
+  const debouncedUpdate = useDebouncedCallback(async (field, value, label) => {
+    setSavingStatus((prev) => ({ ...prev, [field]: "saving" }));
 
-  const handleFormSubmit = async (e) => {
-    e.preventDefault();
-    setIsSaving(true);
-
-    const cleanData = {
-      ...profileData,
-      height: parseInt(profileData.height, 10) || 0,
-      weight: parseFloat(profileData.weight) || 0,
-      weeklyTarget: parseFloat(profileData.weeklyTarget) || 0,
+    const updatedProfileForCalc = { ...profileData, [field]: value };
+    const profileForApi = {
+      ...updatedProfileForCalc,
+      sex: updatedProfileForCalc.gender,
     };
 
-    const newMetrics = calculateAdvancedMetrics(cleanData);
+    const updatePayload = {};
+    if (field === "gender") {
+      updatePayload.sex = value;
+    } else {
+      updatePayload[field] = value;
+    }
 
-    const updatePayload = {
-      ...cleanData,
-      ...newMetrics,
-      daily_water_target: Math.round(cleanData.weight * 35),
-      liked_foods: profileData.liked_foods,
-      disliked_foods: profileData.disliked_foods,
-    };
+    const fieldsThatTriggerRecalculation = [
+      "weight",
+      "height",
+      "dob",
+      "activity",
+      "goal",
+      "weeklyTarget",
+      "gender",
+    ];
 
-    // 1. Actualizăm profilul principal
-    const { error: profileError } = await supabase
+    if (fieldsThatTriggerRecalculation.includes(field)) {
+      // --- LOG 3: Vezi ce primește calculatorul ---
+      console.log("[Profile] Trimit la calculator:", profileForApi);
+      const newMetrics = calculateAdvancedMetrics(profileForApi);
+
+      // --- LOG 4: Vezi ce returnează calculatorul ---
+      console.log("[Profile] Primit de la calculator:", newMetrics);
+
+      if (newMetrics) {
+        Object.assign(updatePayload, newMetrics);
+      }
+
+      if (updatedProfileForCalc.weight) {
+        updatePayload.daily_water_target = Math.round(
+          updatedProfileForCalc.weight * 35
+        );
+      }
+
+      if (field === "weight") {
+        await supabase
+          .from("weight_log")
+          .insert({ user_id: updatedProfileForCalc.id, weight: value });
+      }
+    }
+
+    delete updatePayload.gender;
+
+    // --- LOG 5: Vezi payload-ul final înainte de trimitere ---
+    console.log("[Profile] Payload final pentru Supabase:", updatePayload);
+
+    const { error } = await supabase
       .from("profiles")
       .update(updatePayload)
-      .eq("id", profileData.id);
+      .eq("id", updatedProfileForCalc.id);
 
-    if (profileError) {
-      setIsSaving(false);
-      toast.error(`Failed to update profile: ${profileError.message}`);
-      console.error("Profile update error:", profileError);
-      return;
-    }
-
-    // 2. Adăugăm intrarea în jurnalul de greutate
-    const { error: logError } = await supabase
-      .from("weight_log")
-      .insert({ user_id: profileData.id, weight: cleanData.weight });
-
-    setIsSaving(false);
-
-    if (logError) {
-      toast.warning("Profile saved, but could not log weight entry.");
-      console.warn("Weight log insert error:", logError);
+    if (error) {
+      setSavingStatus((prev) => ({ ...prev, [field]: "error" }));
+      toast.error(`Failed to update ${label}.`);
+      console.error("Update Error:", error);
     } else {
-      toast.success("Profile updated and preferences saved!");
-      fetchProfile();
+      setSavingStatus((prev) => ({ ...prev, [field]: "saved" }));
+      if (fieldsThatTriggerRecalculation.includes(field)) {
+        fetchProfile();
+      }
     }
+  }, 1500);
+
+  const handleChange = (field, value, label = field) => {
+    setProfileData((prev) => ({ ...prev, [field]: value }));
+    debouncedUpdate(field, value, label);
   };
 
-  if (loading) {
-    return <LoadingSpinner />;
-  }
-
-  if (error) {
-    return <div className="text-center text-red-500">{error}</div>;
-  }
-
-  if (!profileData) {
-    return (
-      <div className="text-center">
-        No profile data found.
-        <Link href="/dashboard" className="text-blue-500 underline ml-2">
-          Go back
-        </Link>
-      </div>
-    );
-  }
+  if (loading) return <LoadingSpinner />;
+  if (error) return <div className="text-center text-red-500">{error}</div>;
+  if (!profileData)
+    return <div className="text-center">No profile data found.</div>;
 
   return (
-    <div className="w-full max-w-2xl mx-auto p-4 space-y-8">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-2xl">Your Profile</CardTitle>
-            <Button variant="ghost" size="icon" asChild>
-              <Link href="/dashboard">
-                <ArrowLeft />
-              </Link>
-            </Button>
-          </div>
-          <CardDescription>
-            Update your personal information, goals, and food preferences.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleFormSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
-                <Input
-                  id="name"
-                  value={profileData.name || ""}
-                  onChange={(e) => handleChange("name", e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="dob">Date of Birth</Label>
-                <Input
-                  id="dob"
-                  type="date"
-                  value={profileData.dob || ""}
-                  onChange={(e) => handleChange("dob", e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="height">Height (cm)</Label>
-                <Input
-                  id="height"
-                  type="number"
-                  value={profileData.height || ""}
-                  onChange={(e) => handleChange("height", e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="weight">Current Weight (kg)</Label>
-                <Input
-                  id="weight"
-                  type="number"
-                  step="0.1"
-                  value={profileData.weight || ""}
-                  onChange={(e) => handleChange("weight", e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Activity Level</Label>
-                <Select
-                  value={profileData.activity || ""}
-                  onValueChange={(val) => handleChange("activity", val)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="sedentary">Sedentary</SelectItem>
-                    <SelectItem value="lightly_active">
-                      Lightly Active
-                    </SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="very_active">Very Active</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Primary Goal</Label>
-                <Select
-                  value={profileData.goal || ""}
-                  onValueChange={(val) => handleChange("goal", val)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="lose_weight">Lose Weight</SelectItem>
-                    <SelectItem value="get_leaner">Get Leaner</SelectItem>
-                    <SelectItem value="gain_muscle">Gain Muscle</SelectItem>
-                    <SelectItem value="gain_strength">Gain Strength</SelectItem>
-                    <SelectItem value="overall_health">
-                      Improve Overall Health
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* --- Secțiunea pentru Preferințe Alimentare --- */}
-            <div className="space-y-4 pt-4 border-t">
-              <h3 className="text-lg font-medium">Food Preferences</h3>
-              <div className="space-y-2">
-                <Label>Foods I Like</Label>
-                <MultiSelect
-                  options={foodOptions}
-                  selected={profileData.liked_foods}
-                  onChange={(selected) => handleChange("liked_foods", selected)}
-                  placeholder="Select your favorite foods..."
-                />
-                <p className="text-sm text-muted-foreground">
-                  We'll try to include these more often in your plan.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label>Foods I Dislike / Allergies</Label>
-                <MultiSelect
-                  options={foodOptions}
-                  selected={profileData.disliked_foods}
-                  onChange={(selected) =>
-                    handleChange("disliked_foods", selected)
-                  }
-                  placeholder="Select foods to avoid..."
-                />
-                <p className="text-sm text-muted-foreground">
-                  We will exclude these from your meal plan.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-4">
-              <Button type="submit" disabled={isSaving}>
-                {isSaving ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+    <div className="w-full min-h-screen bg-slate-50 dark:bg-slate-950 flex justify-center p-4 sm:p-6 md:p-8">
+      <div className="w-full max-w-6xl flex flex-col md:flex-row gap-8">
+        {/* ================== COLOANA STÂNGĂ: NAVIGARE ================== */}
+        <aside className="w-full md:w-1/4 lg:w-1/5 flex-shrink-0">
+          <div className="sticky top-8 space-y-6">
+            <div className="flex flex-col items-center text-center p-4 rounded-2xl bg-white dark:bg-slate-900 shadow-sm">
+              <div className="relative h-24 w-24 rounded-full bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center text-white text-4xl font-bold mb-3">
+                {profileData.name ? (
+                  profileData.name.charAt(0).toUpperCase()
                 ) : (
-                  <Save className="mr-2 h-4 w-4" />
+                  <User />
                 )}
-                Save Changes
+              </div>
+              <h2 className="text-xl font-bold">{profileData.name}</h2>
+              <p className="text-sm text-slate-500">{profileData.email}</p>
+              <Button variant="ghost" size="sm" className="mt-4" asChild>
+                <Link href="/dashboard">
+                  <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
+                </Link>
               </Button>
             </div>
-          </form>
-        </CardContent>
-      </Card>
+            <nav className="space-y-2">
+              <TabButton
+                icon={User}
+                label="Personal Details"
+                isActive={activeTab === "details"}
+                onClick={() => setActiveTab("details")}
+              />
+              <TabButton
+                icon={Target}
+                label="Goals & Metrics"
+                isActive={activeTab === "goals"}
+                onClick={() => setActiveTab("goals")}
+              />
+              <TabButton
+                icon={Utensils}
+                label="Food Preferences"
+                isActive={activeTab === "prefs"}
+                onClick={() => setActiveTab("prefs")}
+              />
+              <TabButton
+                icon={Heart}
+                label="My Progress"
+                isActive={activeTab === "progress"}
+                onClick={() => setActiveTab("progress")}
+              />
+            </nav>
+          </div>
+        </aside>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>My Progress</CardTitle>
-          <CardDescription>Your weight journey over time.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {loadingLog ? (
-            <div className="text-center p-8">Loading progress chart...</div>
-          ) : weightLog.length > 1 ? (
-            <>
-              <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart
-                    data={weightLog}
-                    margin={{ top: 5, right: 20, left: -10, bottom: 5 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis
-                      domain={["dataMin - 2", "dataMax + 2"]}
-                      allowDecimals={false}
+        {/* ================== COLOANA DREAPTĂ: CONȚINUT ================== */}
+        <main className="w-full md:w-3/4 lg:w-4/5">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3, ease: "circOut" }}
+            >
+              {activeTab === "details" && (
+                <SectionWrapper title="Personal Details">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <EditableField
+                      label="Full Name"
+                      field="name"
+                      value={profileData.name}
+                      onChange={handleChange}
+                      status={savingStatus.name}
                     />
-                    <Tooltip />
-                    <Legend />
-                    <Line
-                      type="monotone"
-                      dataKey="weight"
-                      stroke="#3b82f6"
-                      strokeWidth={2}
-                      dot={{ r: 4 }}
-                      activeDot={{ r: 8 }}
+                    <EditableField
+                      label="Date of Birth"
+                      field="dob"
+                      type="date"
+                      value={profileData.dob}
+                      onChange={handleChange}
+                      status={savingStatus.dob}
                     />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-              <div>
-                <h4 className="font-semibold mb-2">Recent Logs</h4>
-                <ul className="space-y-2">
-                  {weightLog
-                    .slice(-5)
-                    .reverse()
-                    .map((log, index) => (
-                      <li
-                        key={index}
-                        className="flex justify-between p-2 rounded-md bg-slate-100 dark:bg-slate-800"
-                      >
-                        <span>{log.date}</span>
-                        <span className="font-semibold">{log.weight} kg</span>
-                      </li>
-                    ))}
-                </ul>
-              </div>
-            </>
-          ) : (
-            <p className="text-center text-slate-500 p-8">
-              Not enough data to display a chart. Update your weight a few times
-              to see your progress.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+                  </div>
+                </SectionWrapper>
+              )}
+              {activeTab === "goals" && (
+                <SectionWrapper title="Goals & Metrics">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <EditableField
+                      label="Height (cm)"
+                      field="height"
+                      type="number"
+                      value={profileData.height}
+                      onChange={handleChange}
+                      status={savingStatus.height}
+                    />
+                    <EditableField
+                      label="Current Weight (kg)"
+                      field="weight"
+                      type="number"
+                      step="0.1"
+                      value={profileData.weight}
+                      onChange={handleChange}
+                      status={savingStatus.weight}
+                    />
+                    <EditableSelect
+                      label="Activity Level"
+                      field="activity"
+                      value={profileData.activity}
+                      onChange={handleChange}
+                      status={savingStatus.activity}
+                      options={[
+                        { value: "sedentary", label: "Sedentary" },
+                        { value: "lightly_active", label: "Lightly Active" },
+                        { value: "active", label: "Active" },
+                        { value: "very_active", label: "Very Active" },
+                      ]}
+                    />
+                    <EditableSelect
+                      label="Primary Goal"
+                      field="goal"
+                      value={profileData.goal}
+                      onChange={handleChange}
+                      status={savingStatus.goal}
+                      options={[
+                        { value: "lose_weight", label: "Lose Weight" },
+                        { value: "get_leaner", label: "Get Leaner" },
+                        { value: "gain_muscle", label: "Gain Muscle" },
+                        { value: "gain_strength", label: "Gain Strength" },
+                        {
+                          value: "overall_health",
+                          label: "Improve Overall Health",
+                        },
+                      ]}
+                    />
+                  </div>
+                </SectionWrapper>
+              )}
+              {activeTab === "prefs" && (
+                <SectionWrapper title="Food Preferences">
+                  <div className="space-y-8">
+                    <div>
+                      <Label className="text-base font-semibold">
+                        Foods I Like
+                      </Label>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        We'll try to include these more often.
+                      </p>
+                      <MultiSelect
+                        options={foodOptions}
+                        selected={profileData.liked_foods}
+                        onChange={(selected) =>
+                          handleChange("liked_foods", selected, "Liked foods")
+                        }
+                        placeholder="Select your favorite foods..."
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-base font-semibold">
+                        Foods I Dislike / Allergies
+                      </Label>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        We will exclude these from your meal plan.
+                      </p>
+                      <MultiSelect
+                        options={foodOptions}
+                        selected={profileData.disliked_foods}
+                        onChange={(selected) =>
+                          handleChange(
+                            "disliked_foods",
+                            selected,
+                            "Disliked foods"
+                          )
+                        }
+                        placeholder="Select foods to avoid..."
+                      />
+                    </div>
+                  </div>
+                </SectionWrapper>
+              )}
+              {activeTab === "progress" && (
+                <SectionWrapper title="My Progress">
+                  {loadingLog ? (
+                    <div className="text-center p-8">
+                      Loading progress chart...
+                    </div>
+                  ) : weightLog.length > 1 ? (
+                    <div className="h-80 w-full bg-white dark:bg-slate-900 p-4 rounded-xl">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart
+                          data={weightLog}
+                          margin={{ top: 5, right: 20, left: -10, bottom: 5 }}
+                        >
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            strokeOpacity={0.2}
+                          />
+                          <XAxis dataKey="date" />
+                          <YAxis
+                            domain={["dataMin - 2", "dataMax + 2"]}
+                            allowDecimals={false}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "rgba(255, 255, 255, 0.8)",
+                              backdropFilter: "blur(4px)",
+                              borderRadius: "0.5rem",
+                              border: "1px solid rgba(0, 0, 0, 0.1)",
+                            }}
+                          />
+                          <motion.g>
+                            <Line
+                              type="monotone"
+                              dataKey="weight"
+                              stroke="#3b82f6"
+                              strokeWidth={3}
+                              dot={{ r: 5 }}
+                              activeDot={{ r: 8 }}
+                            />
+                          </motion.g>
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <p className="text-center text-slate-500 p-8">
+                      Not enough data to display a chart.
+                    </p>
+                  )}
+                </SectionWrapper>
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </main>
+      </div>
     </div>
   );
 }
+
+// --- COMPONENTE HELPER PENTRU NOUL UI ---
+
+const TabButton = ({ icon: Icon, label, isActive, onClick }) => (
+  <button
+    onClick={onClick}
+    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors duration-200 ${
+      isActive
+        ? "bg-blue-500 text-white shadow-md"
+        : "hover:bg-slate-100 dark:hover:bg-slate-800"
+    }`}
+  >
+    <Icon className="h-5 w-5 flex-shrink-0" />
+    <span className="font-semibold">{label}</span>
+  </button>
+);
+
+const SectionWrapper = ({ title, children }) => (
+  <div className="bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-2xl shadow-sm">
+    <h3 className="text-2xl font-bold mb-6 border-b pb-4 border-slate-200 dark:border-slate-800">
+      {title}
+    </h3>
+    {children}
+  </div>
+);
+
+const EditableField = ({ label, field, value, onChange, status, ...props }) => (
+  <div className="space-y-2">
+    <div className="flex items-center justify-between h-6">
+      <Label htmlFor={field} className="text-base">
+        {label}
+      </Label>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={status || "idle"}
+          initial={{ opacity: 0, scale: 0.5 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.5 }}
+          className="flex items-center gap-1 text-xs"
+        >
+          {status === "saving" && (
+            <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+          )}
+          {status === "saved" && <Check className="h-4 w-4 text-green-500" />}
+        </motion.div>
+      </AnimatePresence>
+    </div>
+    <FloatingLabelInput
+      id={field}
+      label={label}
+      value={value || ""}
+      onChange={(e) => onChange(field, e.target.value, label)}
+      {...props}
+    />
+  </div>
+);
+
+const EditableSelect = ({ label, field, value, onChange, status, options }) => (
+  <div className="space-y-2">
+    <div className="flex items-center justify-between h-6">
+      <Label className="text-base">{label}</Label>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={status || "idle"}
+          initial={{ opacity: 0, scale: 0.5 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.5 }}
+          className="flex items-center gap-1 text-xs"
+        >
+          {status === "saving" && (
+            <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+          )}
+          {status === "saved" && <Check className="h-4 w-4 text-green-500" />}
+        </motion.div>
+      </AnimatePresence>
+    </div>
+    <Select
+      value={value || ""}
+      onValueChange={(val) => onChange(field, val, label)}
+    >
+      <SelectTrigger className="h-14 text-base">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((opt) => (
+          <SelectItem key={opt.value} value={opt.value} className="text-base">
+            {opt.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  </div>
+);
