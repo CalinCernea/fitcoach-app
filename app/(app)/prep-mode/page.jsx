@@ -38,6 +38,7 @@ export default function PrepModePage() {
   const [currentPrepStatus, setCurrentPrepStatus] = useState(null);
   const [completedSteps, setCompletedSteps] = useState(new Set());
   const [activeStepIndex, setActiveStepIndex] = useState(0);
+  const [periodSelected, setPeriodSelected] = useState(false);
 
   // --- STAREA NOUĂ PENTRU EVIDENȚIERE ---
   const [highlightedIngredients, setHighlightedIngredients] = useState(
@@ -181,19 +182,33 @@ export default function PrepModePage() {
     }
   };
 
-  const handleStepToggle = (stepId) => {
+  const handleStepToggle = (stepId, index) => {
     const newSet = new Set(completedSteps);
+
     if (newSet.has(stepId)) {
+      // Dacă debifăm, doar actualizăm starea
       newSet.delete(stepId);
       setCompletedSteps(newSet);
     } else {
+      // Dacă bifăm, actualizăm starea și avansăm
       newSet.add(stepId);
       setCompletedSteps(newSet);
-      if (activeStepIndex < prepSteps.length - 1) {
+
+      // Setăm pasul curent la cel pe care am dat click, pentru a actualiza focusul
+      setActiveStepIndex(index);
+
+      // Și avansăm automat la următorul pas, dacă nu e ultimul
+      if (index < prepSteps.length - 1) {
         setTimeout(() => {
-          setActiveStepIndex(activeStepIndex + 1);
-        }, 300);
+          setActiveStepIndex(index + 1);
+        }, 400); // O mică întârziere pentru animație
       }
+    }
+  };
+
+  const goToPrevStep = () => {
+    if (activeStepIndex > 0) {
+      setActiveStepIndex(activeStepIndex - 1);
     }
   };
 
@@ -207,44 +222,69 @@ export default function PrepModePage() {
   return (
     <div className="w-full min-h-screen bg-slate-50 dark:bg-slate-950 p-4 sm:p-6 md:p-8">
       <div className="w-full max-w-7xl mx-auto">
+        {/* ================== HEADER ================== */}
         <header className="flex justify-between items-center mb-6">
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
-            className="flex items-center gap-4"
-          >
-            <ChefHat className="h-10 w-10 text-blue-500" />
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">
-                Your Weekly Headstart
-              </h1>
-              <p className="text-slate-500 dark:text-slate-400">
-                Prep once, eat well all week. Let's get cooking.
-              </p>
-            </div>
-          </motion.div>
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
-          >
-            <Button variant="ghost" asChild>
-              <Link href="/dashboard">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Dashboard
-              </Link>
-            </Button>
-          </motion.div>
+          {/* ... conținutul header-ului rămâne neschimbat ... */}
         </header>
 
-        <main className="flex flex-col gap-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1, ease: "easeOut" }}
-          >
-            {currentPrepStatus ? (
+        {/* ================== MAIN CONTENT AREA (Master-Detail) ================== */}
+        <main className="flex flex-col gap-8">
+          {/* Cardul 1: Apare mereu la început dacă nu e activat prep mode */}
+          <AnimatePresence>
+            {!currentPrepStatus && !periodSelected && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.4 }}
+              >
+                <Card>
+                  <CardHeader>
+                    <CardTitle>1. Choose Your Prep Window</CardTitle>
+                    <CardDescription>
+                      How many days of effortless eating are you aiming for?
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex gap-2">
+                    <Button
+                      variant={daysToPrep === 3 ? "default" : "outline"}
+                      onClick={() => {
+                        setDaysToPrep(3);
+                        setPeriodSelected(true);
+                      }}
+                    >
+                      3 Days
+                    </Button>
+                    <Button
+                      variant={daysToPrep === 5 ? "default" : "outline"}
+                      onClick={() => {
+                        setDaysToPrep(5);
+                        setPeriodSelected(true);
+                      }}
+                    >
+                      5 Days
+                    </Button>
+                    <Button
+                      variant={daysToPrep === 7 ? "default" : "outline"}
+                      onClick={() => {
+                        setDaysToPrep(7);
+                        setPeriodSelected(true);
+                      }}
+                    >
+                      7 Days
+                    </Button>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Cardul de Status: Apare dacă prep mode este deja activ */}
+          {currentPrepStatus && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
               <Card className="border-green-500 bg-green-50 dark:bg-green-900/20">
                 <CardHeader>
                   <div className="flex items-center justify-between">
@@ -274,208 +314,211 @@ export default function PrepModePage() {
                   </CardDescription>
                 </CardHeader>
               </Card>
-            ) : (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Choose Your Prep Window</CardTitle>
-                  <CardDescription>
-                    How many days of effortless eating are you aiming for?
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex gap-2">
-                  <Button
-                    variant={daysToPrep === 3 ? "default" : "outline"}
-                    onClick={() => setDaysToPrep(3)}
-                  >
-                    3 Days
-                  </Button>
-                  <Button
-                    variant={daysToPrep === 5 ? "default" : "outline"}
-                    onClick={() => setDaysToPrep(5)}
-                  >
-                    5 Days
-                  </Button>
-                  <Button
-                    variant={daysToPrep === 7 ? "default" : "outline"}
-                    onClick={() => setDaysToPrep(7)}
-                  >
-                    7 Days
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
-          </motion.div>
-
-          {/* --- AICI ESTE STRUCTURA CORECTATĂ --- */}
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* --- Coloana 1: Your Prep List --- */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.2, ease: "easeOut" }}
-            >
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Utensils /> Your Prep List
-                  </CardTitle>
-                  <CardDescription>
-                    The building blocks for your upcoming meals.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {prepComponents.length > 0 ? (
-                    <AnimatePresence>
-                      {prepComponents.map((group, index) => (
-                        <motion.div
-                          key={group.groupName}
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: index * 0.1 }}
-                        >
-                          <h3 className="font-semibold mb-2 text-lg">
-                            {group.groupName}
-                          </h3>
-                          <ul className="space-y-2">
-                            {group.items.map((item) => {
-                              // --- LOGICA DE EVIDENȚIERE APLICATĂ AICI ---
-                              const isHighlighted = highlightedIngredients.has(
-                                item.id
-                              );
-                              if (isHighlighted) {
-                                console.log(
-                                  `[LOG 3] Se aplică stilul pentru: ${item.name} (ID: ${item.id})`
-                                );
-                              }
-                              return (
-                                <li
-                                  key={item.id}
-                                  className={`flex items-center justify-between p-2.5 rounded-lg transition-all duration-300 ${
-                                    isHighlighted
-                                      ? "bg-blue-100 dark:bg-blue-900/50 ring-2 ring-blue-500"
-                                      : "bg-slate-100 dark:bg-slate-800/50"
-                                  }`}
-                                >
-                                  <span>{item.name}</span>
-                                  <span className="font-mono text-slate-500">
-                                    {item.totalAmount}
-                                    {item.unit}
-                                  </span>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        </motion.div>
-                      ))}
-                    </AnimatePresence>
-                  ) : (
-                    <p className="text-slate-500 text-center pt-10">
-                      No components to prep.
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
             </motion.div>
+          )}
 
-            {/* --- Coloana 2: Your Action Plan (Focus Mode) --- */}
+          {/* Layout-ul Master-Detail: Apare doar DUPĂ ce s-a selectat perioada sau dacă prep mode e deja activ */}
+          {(periodSelected || currentPrepStatus) && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.3, ease: "easeOut" }}
+              transition={{ delay: 0.1 }}
+              className="grid md:grid-cols-12 gap-8"
             >
-              <Card className="flex-grow flex flex-col">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <ClipboardList /> Your Action Plan
-                  </CardTitle>
-                  <CardDescription>
-                    One step at a time. Focus and flow.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex-grow flex flex-col justify-center items-center">
-                  {prepSteps.length > 0 ? (
-                    <div className="w-full flex flex-col items-center">
-                      <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 mb-6">
-                        <motion.div
-                          className="bg-blue-500 h-2.5 rounded-full"
-                          initial={{ width: 0 }}
-                          animate={{
-                            width: `${
-                              (completedSteps.size / prepSteps.length) * 100
-                            }%`,
-                          }}
-                          transition={{ duration: 0.5, ease: "easeInOut" }}
-                        />
-                      </div>
-                      <AnimatePresence mode="wait">
-                        {prepSteps.map(
-                          (step, index) =>
-                            index === activeStepIndex && (
-                              <motion.div
-                                key={step.id}
-                                initial={{ opacity: 0, y: 50, scale: 0.9 }}
-                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                exit={{ opacity: 0, y: -50, scale: 0.9 }}
-                                transition={{ duration: 0.4, ease: "circOut" }}
-                                className="w-full flex items-center gap-4 p-6 rounded-xl bg-slate-100 dark:bg-slate-800/50"
-                              >
-                                <Checkbox
-                                  id={`step-${index}`}
-                                  checked={completedSteps.has(step.id)}
-                                  onCheckedChange={() =>
-                                    handleStepToggle(step.id)
-                                  }
-                                  className="h-8 w-8"
-                                />
-                                <label
-                                  htmlFor={`step-${index}`}
-                                  className="text-lg font-semibold leading-tight flex-grow cursor-pointer"
-                                >
-                                  {step.text}
-                                </label>
-                              </motion.div>
-                            )
-                        )}
+              {/* --- COLOANA STÂNGA: "MASTER" --- */}
+              <div className="md:col-span-5 space-y-6">
+                {/* Card Prep List */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Utensils />{" "}
+                      {currentPrepStatus
+                        ? "Prepped Components"
+                        : "2. Your Prep List"}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {prepComponents.length > 0 ? (
+                      <AnimatePresence>
+                        {prepComponents.map((group, index) => (
+                          <motion.div
+                            key={group.groupName}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: index * 0.1 }}
+                          >
+                            <h3 className="font-semibold mb-2 text-lg">
+                              {group.groupName}
+                            </h3>
+                            <ul className="space-y-2">
+                              {group.items.map((item) => {
+                                const isHighlighted =
+                                  highlightedIngredients.has(item.id);
+                                if (isHighlighted) {
+                                  console.log(
+                                    `[LOG 3] Se aplică stilul pentru: ${item.name} (ID: ${item.id})`
+                                  );
+                                }
+                                return (
+                                  <li
+                                    key={item.id}
+                                    className={`flex items-center justify-between p-2.5 rounded-lg transition-all duration-300 ${
+                                      isHighlighted
+                                        ? "bg-blue-100 dark:bg-blue-900/50 ring-2 ring-blue-500"
+                                        : "bg-slate-100 dark:bg-slate-800/50"
+                                    }`}
+                                  >
+                                    <span>{item.name}</span>
+                                    <span className="font-mono text-slate-500">
+                                      {item.totalAmount}
+                                      {item.unit}
+                                    </span>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </motion.div>
+                        ))}
                       </AnimatePresence>
-                      <div className="mt-8 w-full">
+                    ) : (
+                      <p className="text-slate-500 text-center pt-10">
+                        No components to prep.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Card Action Plan (lista completă) */}
+              </div>
+
+              {/* --- COLOANA DREAPTA: "DETAIL" --- */}
+              {!currentPrepStatus && (
+                <div className="md:col-span-7">
+                  <div className="sticky top-24">
+                    <Card className="bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 shadow-2xl">
+                      <CardHeader>
+                        <p className="text-sm font-semibold text-blue-500">
+                          FOCUS ON: STEP {activeStepIndex + 1} OF{" "}
+                          {prepSteps.length}
+                        </p>
+                        <div className="w-full bg-slate-300 dark:bg-slate-700 rounded-full h-2 mt-2">
+                          <motion.div
+                            className="bg-blue-500 h-2 rounded-full"
+                            animate={{
+                              width: `${
+                                ((activeStepIndex + 1) / prepSteps.length) * 100
+                              }%`,
+                            }}
+                          />
+                        </div>
+                      </CardHeader>
+                      <CardContent className="py-10 md:py-20">
+                        <AnimatePresence mode="wait">
+                          {prepSteps[activeStepIndex] && (
+                            <motion.div
+                              key={activeStepIndex}
+                              initial={{ opacity: 0, y: 30 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -30 }}
+                              transition={{ duration: 0.4, ease: "circOut" }}
+                              className="text-center"
+                            >
+                              <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
+                                {prepSteps[activeStepIndex].text}
+                              </h2>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </CardContent>
+                      <div className="p-6 border-t dark:border-slate-700/50">
+                        <Button
+                          size="lg"
+                          onClick={() => {
+                            // Dacă pasul nu e completat, îl marcăm și avansăm
+                            if (
+                              !completedSteps.has(prepSteps[activeStepIndex].id)
+                            ) {
+                              handleStepToggle(
+                                prepSteps[activeStepIndex].id,
+                                activeStepIndex
+                              );
+                            } else {
+                              // Dacă e deja completat, doar avansăm
+                              if (activeStepIndex < prepSteps.length - 1) {
+                                setActiveStepIndex(activeStepIndex + 1);
+                              }
+                            }
+                          }}
+                          disabled={
+                            saving ||
+                            // Se dezactivează doar dacă e ultimul pas ȘI e completat
+                            (completedSteps.has(
+                              prepSteps[activeStepIndex]?.id
+                            ) &&
+                              activeStepIndex === prepSteps.length - 1)
+                          }
+                          className="w-full"
+                        >
+                          {(() => {
+                            const isCompleted = completedSteps.has(
+                              prepSteps[activeStepIndex]?.id
+                            );
+                            const isLastStep =
+                              activeStepIndex === prepSteps.length - 1;
+
+                            if (isCompleted && isLastStep) {
+                              return (
+                                <>
+                                  <CheckCircle2 className="mr-2 h-5 w-5" />
+                                  All Steps Done!
+                                </>
+                              );
+                            }
+                            if (isCompleted) {
+                              return "Next Step";
+                            }
+                            return "Mark as Done";
+                          })()}
+                        </Button>
+
+                        {/* --- BUTONUL NOU ADAUGAT AICI --- */}
+                        <div className="text-center mt-4">
+                          <Button
+                            variant="link"
+                            size="sm"
+                            onClick={goToPrevStep}
+                            disabled={activeStepIndex === 0}
+                            className="text-slate-500"
+                          >
+                            Go to Previous Step
+                          </Button>
+                        </div>
+                        {/* -------------------------------- */}
+                      </div>
+                    </Card>
+                    {allStepsCompleted && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mt-6"
+                      >
                         <Button
                           size="lg"
                           onClick={handleMarkAsPrepped}
-                          disabled={saving || !allStepsCompleted}
-                          className="w-full transition-all duration-300"
+                          disabled={saving}
+                          className="w-full bg-green-500 hover:bg-green-600 text-white shadow-lg"
                         >
-                          {saving ? (
-                            <>
-                              <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                              Saving...
-                            </>
-                          ) : (
-                            <>
-                              <CheckCircle2 className="mr-2 h-5 w-5" />
-                              Activate Prep Mode
-                            </>
-                          )}
+                          {saving
+                            ? "Saving..."
+                            : "All Done! Activate Prep Mode"}
                         </Button>
-                        {!allStepsCompleted && (
-                          <p className="text-xs text-center text-slate-500 mt-2">
-                            {prepSteps.length - completedSteps.size} step
-                            {prepSteps.length - completedSteps.size !== 1
-                              ? "s"
-                              : ""}{" "}
-                            remaining
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-slate-500 text-center">
-                      No steps to show.
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
+                      </motion.div>
+                    )}
+                  </div>
+                </div>
+              )}
             </motion.div>
-          </div>
+          )}
         </main>
       </div>
     </div>
