@@ -66,6 +66,7 @@ export default function ProfilePage() {
   // --- NOU: Stări pentru noul UI ---
   const [activeTab, setActiveTab] = useState("details");
   const [savingStatus, setSavingStatus] = useState({});
+  const [needsPlanRefresh, setNeedsPlanRefresh] = useState(false);
 
   const fetchWeightLog = useCallback(async (userId) => {
     setLoadingLog(true);
@@ -151,23 +152,15 @@ export default function ProfilePage() {
     ];
 
     if (fieldsThatTriggerRecalculation.includes(field)) {
-      // --- LOG 3: Vezi ce primește calculatorul ---
-      console.log("[Profile] Trimit la calculator:", profileForApi);
       const newMetrics = calculateAdvancedMetrics(profileForApi);
-
-      // --- LOG 4: Vezi ce returnează calculatorul ---
-      console.log("[Profile] Primit de la calculator:", newMetrics);
-
       if (newMetrics) {
         Object.assign(updatePayload, newMetrics);
       }
-
       if (updatedProfileForCalc.weight) {
         updatePayload.daily_water_target = Math.round(
           updatedProfileForCalc.weight * 35
         );
       }
-
       if (field === "weight") {
         await supabase
           .from("weight_log")
@@ -176,9 +169,6 @@ export default function ProfilePage() {
     }
 
     delete updatePayload.gender;
-
-    // --- LOG 5: Vezi payload-ul final înainte de trimitere ---
-    console.log("[Profile] Payload final pentru Supabase:", updatePayload);
 
     const { error } = await supabase
       .from("profiles")
@@ -191,8 +181,12 @@ export default function ProfilePage() {
       console.error("Update Error:", error);
     } else {
       setSavingStatus((prev) => ({ ...prev, [field]: "saved" }));
+
+      // --- MODIFICARE CRUCIALĂ ---
       if (fieldsThatTriggerRecalculation.includes(field)) {
-        fetchProfile();
+        // În loc să facem fetchProfile(), setăm steagul.
+        console.log("🚩 Plan refresh needed. Flag set to true.");
+        setNeedsPlanRefresh(true);
       }
     }
   }, 1500);
@@ -223,10 +217,21 @@ export default function ProfilePage() {
               </div>
               <h2 className="text-xl font-bold">{profileData.name}</h2>
               <p className="text-sm text-slate-500">{profileData.email}</p>
-              <Button variant="ghost" size="sm" className="mt-4" asChild>
-                <Link href="/dashboard">
-                  <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
-                </Link>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mt-4"
+                onClick={() => {
+                  if (needsPlanRefresh) {
+                    // Dacă este nevoie de refresh, navigăm cu parametrul special
+                    router.push("/dashboard?refresh=true");
+                  } else {
+                    // Altfel, navigăm normal
+                    router.push("/dashboard");
+                  }
+                }}
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
               </Button>
             </div>
             <nav className="space-y-2">
