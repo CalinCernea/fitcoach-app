@@ -17,6 +17,9 @@ import { Utensils, ClipboardList, ChefHat, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
+import { ArrowLeft } from "lucide-react";
+import confetti from "canvas-confetti";
 
 const LoadingSpinner = () => (
   <div className="flex items-center justify-center h-screen">
@@ -34,6 +37,12 @@ export default function PrepModePage() {
   const [userId, setUserId] = useState(null);
   const [currentPrepStatus, setCurrentPrepStatus] = useState(null);
   const [completedSteps, setCompletedSteps] = useState(new Set());
+  const [activeStepIndex, setActiveStepIndex] = useState(0);
+
+  // --- STAREA NOUĂ PENTRU EVIDENȚIERE ---
+  const [highlightedIngredients, setHighlightedIngredients] = useState(
+    new Set()
+  );
 
   useEffect(() => {
     const fetchAndGeneratePrepPlan = async () => {
@@ -49,7 +58,6 @@ export default function PrepModePage() {
 
       setUserId(user.id);
 
-      // Verificăm statusul de prep curent
       const { data: profile } = await supabase
         .from("profiles")
         .select("prep_status")
@@ -60,7 +68,6 @@ export default function PrepModePage() {
         setCurrentPrepStatus(profile.prep_status);
       }
 
-      // Fetch plans for the selected number of days
       const dateStrings = Array.from({ length: daysToPrep }, (_, i) => {
         const d = new Date();
         d.setDate(d.getDate() + i);
@@ -80,55 +87,68 @@ export default function PrepModePage() {
         return;
       }
 
-      // Generate the prep list and steps
       const components = generatePrepList(dailyPlans);
       const steps = generatePrepSteps(components);
 
+      // --- LOG 1: Verificăm pașii generați ---
+      console.log("[LOG 1] Pașii generați (verifică ingredientIds):", steps);
+
       setPrepComponents(components);
       setPrepSteps(steps);
-      setCompletedSteps(new Set()); // Reset checkbox-urile când se schimbă perioada
+      setCompletedSteps(new Set());
+      setActiveStepIndex(0); // Resetăm și pasul activ
       setLoading(false);
     };
 
     fetchAndGeneratePrepPlan();
   }, [daysToPrep, router]);
 
+  // --- HOOK-UL NOU PENTRU A ACTUALIZA EVIDENȚIEREA ---
+  useEffect(() => {
+    if (prepSteps.length > 0 && prepSteps[activeStepIndex]) {
+      const currentStep = prepSteps[activeStepIndex];
+      const idsToHighlight = new Set(currentStep.ingredientIds || []);
+
+      // --- LOG 2: Verificăm ce ID-uri se evidențiază ---
+      console.log(
+        `[LOG 2] Pasul activ ${activeStepIndex}. Se evidențiază ID-urile:`,
+        idsToHighlight
+      );
+
+      setHighlightedIngredients(idsToHighlight);
+    }
+  }, [activeStepIndex, prepSteps]);
+
   const handleMarkAsPrepped = async () => {
     if (!userId || prepComponents.length === 0) {
       toast.error("No components to mark as prepped.");
       return;
     }
-
     setSaving(true);
-
     try {
-      // MODIFICAT: Calculăm data de expirare pe baza numărului de zile selectat
       const expiryDate = new Date();
       expiryDate.setDate(expiryDate.getDate() + daysToPrep);
-
       const prepStatus = {
         components: prepComponents,
         preppedAt: new Date().toISOString(),
         expiresAt: expiryDate.toISOString(),
-        daysPrepped: daysToPrep, // Numărul de zile pentru care sunt valabile componentele
+        daysPrepped: daysToPrep,
       };
-
-      // Salvăm în profil
       const { error } = await supabase
         .from("profiles")
         .update({ prep_status: prepStatus })
         .eq("id", userId);
-
-      if (error) {
-        throw error;
-      }
-
+      if (error) throw error;
+      confetti({
+        particleCount: 150, // Numărul de bucățele de confetti
+        spread: 90, // Cât de larg se împrăștie
+        origin: { y: 0.6 }, // De unde pornește (puțin mai jos de centru)
+        zIndex: 1000, // Se asigură că este deasupra celorlalte elemente
+      });
       setCurrentPrepStatus(prepStatus);
       toast.success(
         `Great! Prep mode activated for the next ${daysToPrep} days. Your meal plans are being updated...`
       );
-
-      // Redirect cu parametrul refresh pentru a regenera planurile
       setTimeout(() => {
         router.push("/dashboard?refresh=true");
       }, 1500);
@@ -142,23 +162,15 @@ export default function PrepModePage() {
 
   const handleClearPrepStatus = async () => {
     if (!userId) return;
-
     setSaving(true);
-
     try {
       const { error } = await supabase
         .from("profiles")
         .update({ prep_status: null })
         .eq("id", userId);
-
-      if (error) {
-        throw error;
-      }
-
+      if (error) throw error;
       setCurrentPrepStatus(null);
       toast.success("Prep status cleared! Redirecting to dashboard...");
-
-      // Redirect to dashboard after clearing
       setTimeout(() => {
         router.push("/dashboard?refresh=true");
       }, 1000);
@@ -170,15 +182,19 @@ export default function PrepModePage() {
   };
 
   const handleStepToggle = (stepId) => {
-    setCompletedSteps((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(stepId)) {
-        newSet.delete(stepId);
-      } else {
-        newSet.add(stepId);
+    const newSet = new Set(completedSteps);
+    if (newSet.has(stepId)) {
+      newSet.delete(stepId);
+      setCompletedSteps(newSet);
+    } else {
+      newSet.add(stepId);
+      setCompletedSteps(newSet);
+      if (activeStepIndex < prepSteps.length - 1) {
+        setTimeout(() => {
+          setActiveStepIndex(activeStepIndex + 1);
+        }, 300);
       }
-      return newSet;
-    });
+    }
   };
 
   const allStepsCompleted =
@@ -189,214 +205,279 @@ export default function PrepModePage() {
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto p-4">
-      <header className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-3">
-          <ChefHat className="h-8 w-8 text-blue-500" />
-          <div>
-            <h1 className="text-3xl font-bold">Prep Mode</h1>
-            <p className="text-slate-500">
-              Your smart cooking assistant for the week.
-            </p>
-          </div>
-        </div>
-        <Button variant="outline" asChild>
-          <Link href="/dashboard">Back to Dashboard</Link>
-        </Button>
-      </header>
-
-      {/* Status banner */}
-      {currentPrepStatus && (
-        <Card className="mb-6 border-green-500 bg-green-50 dark:bg-green-900/20">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
-                <CardTitle className="text-green-700 dark:text-green-400">
-                  Components Already Prepped
-                </CardTitle>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleClearPrepStatus}
-                disabled={saving}
-              >
-                Clear Prep Status
-              </Button>
-            </div>
-            <CardDescription>
-              Prepped on:{" "}
-              {new Date(currentPrepStatus.preppedAt).toLocaleDateString()} |
-              Expires:{" "}
-              {new Date(currentPrepStatus.expiresAt).toLocaleDateString()}
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      )}
-
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle>Settings</CardTitle>
-          <CardDescription>
-            How many days do you want to prep for?
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex gap-2">
-          <Button
-            variant={daysToPrep === 3 ? "default" : "outline"}
-            onClick={() => setDaysToPrep(3)}
+    <div className="w-full min-h-screen bg-slate-50 dark:bg-slate-950 p-4 sm:p-6 md:p-8">
+      <div className="w-full max-w-7xl mx-auto">
+        <header className="flex justify-between items-center mb-6">
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+            className="flex items-center gap-4"
           >
-            Next 3 Days
-          </Button>
-          <Button
-            variant={daysToPrep === 5 ? "default" : "outline"}
-            onClick={() => setDaysToPrep(5)}
-          >
-            Next 5 Days
-          </Button>
-          <Button
-            variant={daysToPrep === 7 ? "default" : "outline"}
-            onClick={() => setDaysToPrep(7)}
-          >
-            Next 7 Days
-          </Button>
-        </CardContent>
-      </Card>
-
-      <div className="grid md:grid-cols-2 gap-8">
-        {/* Column 1: What to Prep */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Utensils /> What to Prep
-            </CardTitle>
-            <CardDescription>
-              These are the base components you'll cook now and use later.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {prepComponents.length > 0 ? (
-              prepComponents.map((group) => (
-                <div key={group.groupName}>
-                  <h3 className="font-semibold mb-2 text-lg">
-                    {group.groupName}
-                  </h3>
-                  <ul className="space-y-2">
-                    {group.items.map((item) => (
-                      <li
-                        key={item.id}
-                        className="flex items-center justify-between p-2 rounded-md bg-slate-50 dark:bg-slate-800/50"
-                      >
-                        <span>{item.name}</span>
-                        <span className="font-mono text-slate-500">
-                          {item.totalAmount}
-                          {item.unit}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))
-            ) : (
-              <p className="text-slate-500">
-                No components to prep for the selected period.
+            <ChefHat className="h-10 w-10 text-blue-500" />
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">
+                Your Weekly Headstart
+              </h1>
+              <p className="text-slate-500 dark:text-slate-400">
+                Prep once, eat well all week. Let's get cooking.
               </p>
-            )}
-          </CardContent>
-        </Card>
+            </div>
+          </motion.div>
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+          >
+            <Button variant="ghost" asChild>
+              <Link href="/dashboard">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Dashboard
+              </Link>
+            </Button>
+          </motion.div>
+        </header>
 
-        {/* Column 2: How to Prep */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ClipboardList /> How to Prep
-            </CardTitle>
-            <CardDescription>
-              Follow this optimized checklist for maximum efficiency.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {prepSteps.length > 0 ? (
-              <>
-                <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md">
-                  <p className="text-sm text-blue-700 dark:text-blue-400 font-medium">
-                    ✓ {completedSteps.size} of {prepSteps.length} steps
-                    completed
-                  </p>
-                  {!allStepsCompleted && (
-                    <p className="text-xs text-blue-600 dark:text-blue-500 mt-1">
-                      Complete all steps to activate prep mode
+        <main className="flex flex-col gap-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1, ease: "easeOut" }}
+          >
+            {currentPrepStatus ? (
+              <Card className="border-green-500 bg-green-50 dark:bg-green-900/20">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <CheckCircle2 className="h-6 w-6 text-green-600" />
+                      <CardTitle className="text-green-700 dark:text-green-400">
+                        Prep Mode is Active
+                      </CardTitle>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleClearPrepStatus}
+                      disabled={saving}
+                    >
+                      {saving ? "Clearing..." : "Clear Prep Status"}
+                    </Button>
+                  </div>
+                  <CardDescription className="pt-1">
+                    Ready to use until{" "}
+                    <span className="font-semibold">
+                      {new Date(
+                        currentPrepStatus.expiresAt
+                      ).toLocaleDateString()}
+                    </span>
+                    .
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            ) : (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Choose Your Prep Window</CardTitle>
+                  <CardDescription>
+                    How many days of effortless eating are you aiming for?
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex gap-2">
+                  <Button
+                    variant={daysToPrep === 3 ? "default" : "outline"}
+                    onClick={() => setDaysToPrep(3)}
+                  >
+                    3 Days
+                  </Button>
+                  <Button
+                    variant={daysToPrep === 5 ? "default" : "outline"}
+                    onClick={() => setDaysToPrep(5)}
+                  >
+                    5 Days
+                  </Button>
+                  <Button
+                    variant={daysToPrep === 7 ? "default" : "outline"}
+                    onClick={() => setDaysToPrep(7)}
+                  >
+                    7 Days
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+          </motion.div>
+
+          {/* --- AICI ESTE STRUCTURA CORECTATĂ --- */}
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* --- Coloana 1: Your Prep List --- */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.2, ease: "easeOut" }}
+            >
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Utensils /> Your Prep List
+                  </CardTitle>
+                  <CardDescription>
+                    The building blocks for your upcoming meals.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {prepComponents.length > 0 ? (
+                    <AnimatePresence>
+                      {prepComponents.map((group, index) => (
+                        <motion.div
+                          key={group.groupName}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.1 }}
+                        >
+                          <h3 className="font-semibold mb-2 text-lg">
+                            {group.groupName}
+                          </h3>
+                          <ul className="space-y-2">
+                            {group.items.map((item) => {
+                              // --- LOGICA DE EVIDENȚIERE APLICATĂ AICI ---
+                              const isHighlighted = highlightedIngredients.has(
+                                item.id
+                              );
+                              if (isHighlighted) {
+                                console.log(
+                                  `[LOG 3] Se aplică stilul pentru: ${item.name} (ID: ${item.id})`
+                                );
+                              }
+                              return (
+                                <li
+                                  key={item.id}
+                                  className={`flex items-center justify-between p-2.5 rounded-lg transition-all duration-300 ${
+                                    isHighlighted
+                                      ? "bg-blue-100 dark:bg-blue-900/50 ring-2 ring-blue-500"
+                                      : "bg-slate-100 dark:bg-slate-800/50"
+                                  }`}
+                                >
+                                  <span>{item.name}</span>
+                                  <span className="font-mono text-slate-500">
+                                    {item.totalAmount}
+                                    {item.unit}
+                                  </span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                  ) : (
+                    <p className="text-slate-500 text-center pt-10">
+                      No components to prep.
                     </p>
                   )}
-                </div>
-                {prepSteps.map((step, index) => (
-                  <div
-                    key={step.id}
-                    className="flex items-center gap-3 p-2 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800/50"
-                  >
-                    <Checkbox
-                      id={`step-${index}`}
-                      checked={completedSteps.has(step.id)}
-                      onCheckedChange={() => handleStepToggle(step.id)}
-                    />
-                    <label
-                      htmlFor={`step-${index}`}
-                      className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer ${
-                        completedSteps.has(step.id)
-                          ? "line-through text-slate-500"
-                          : ""
-                      }`}
-                    >
-                      {step.text}
-                    </label>
-                  </div>
-                ))}
-              </>
-            ) : (
-              <p className="text-slate-500">No steps to show.</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                </CardContent>
+              </Card>
+            </motion.div>
 
-      {/* Action Button */}
-      {prepComponents.length > 0 && (
-        <div className="mt-8 flex flex-col items-center gap-4">
-          {!allStepsCompleted && (
-            <div className="text-center">
-              <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
-                📋 Complete all prep steps above to activate prep mode
-              </p>
-            </div>
-          )}
-          <Button
-            size="lg"
-            onClick={handleMarkAsPrepped}
-            disabled={saving || !allStepsCompleted}
-            className="w-full md:w-auto"
-          >
-            {saving ? (
-              <>
-                <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="mr-2 h-5 w-5" />
-                I've Prepped Everything!
-              </>
-            )}
-          </Button>
-          {!allStepsCompleted && (
-            <p className="text-xs text-slate-500">
-              {prepSteps.length - completedSteps.size} step
-              {prepSteps.length - completedSteps.size !== 1 ? "s" : ""}{" "}
-              remaining
-            </p>
-          )}
-        </div>
-      )}
+            {/* --- Coloana 2: Your Action Plan (Focus Mode) --- */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.3, ease: "easeOut" }}
+            >
+              <Card className="flex-grow flex flex-col">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ClipboardList /> Your Action Plan
+                  </CardTitle>
+                  <CardDescription>
+                    One step at a time. Focus and flow.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex-grow flex flex-col justify-center items-center">
+                  {prepSteps.length > 0 ? (
+                    <div className="w-full flex flex-col items-center">
+                      <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 mb-6">
+                        <motion.div
+                          className="bg-blue-500 h-2.5 rounded-full"
+                          initial={{ width: 0 }}
+                          animate={{
+                            width: `${
+                              (completedSteps.size / prepSteps.length) * 100
+                            }%`,
+                          }}
+                          transition={{ duration: 0.5, ease: "easeInOut" }}
+                        />
+                      </div>
+                      <AnimatePresence mode="wait">
+                        {prepSteps.map(
+                          (step, index) =>
+                            index === activeStepIndex && (
+                              <motion.div
+                                key={step.id}
+                                initial={{ opacity: 0, y: 50, scale: 0.9 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: -50, scale: 0.9 }}
+                                transition={{ duration: 0.4, ease: "circOut" }}
+                                className="w-full flex items-center gap-4 p-6 rounded-xl bg-slate-100 dark:bg-slate-800/50"
+                              >
+                                <Checkbox
+                                  id={`step-${index}`}
+                                  checked={completedSteps.has(step.id)}
+                                  onCheckedChange={() =>
+                                    handleStepToggle(step.id)
+                                  }
+                                  className="h-8 w-8"
+                                />
+                                <label
+                                  htmlFor={`step-${index}`}
+                                  className="text-lg font-semibold leading-tight flex-grow cursor-pointer"
+                                >
+                                  {step.text}
+                                </label>
+                              </motion.div>
+                            )
+                        )}
+                      </AnimatePresence>
+                      <div className="mt-8 w-full">
+                        <Button
+                          size="lg"
+                          onClick={handleMarkAsPrepped}
+                          disabled={saving || !allStepsCompleted}
+                          className="w-full transition-all duration-300"
+                        >
+                          {saving ? (
+                            <>
+                              <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                              Saving...
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 className="mr-2 h-5 w-5" />
+                              Activate Prep Mode
+                            </>
+                          )}
+                        </Button>
+                        {!allStepsCompleted && (
+                          <p className="text-xs text-center text-slate-500 mt-2">
+                            {prepSteps.length - completedSteps.size} step
+                            {prepSteps.length - completedSteps.size !== 1
+                              ? "s"
+                              : ""}{" "}
+                            remaining
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-slate-500 text-center">
+                      No steps to show.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

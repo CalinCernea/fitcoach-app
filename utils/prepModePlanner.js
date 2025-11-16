@@ -159,42 +159,66 @@ export function generatePrepSteps(prepComponents) {
     ovenUsed = true;
   }
 
+  // --- MODIFICARE 1: Adăugăm ingredientIds la pașii generici ---
   if (ovenUsed) {
     steps.push({
       id: "step_preheat",
       text: "Preheat your oven to 200°C (400°F).",
+      ingredientIds: [], // Pas generic, fără ingrediente
     });
   }
   steps.push({
     id: "step_wash",
     text: "Wash all vegetables and rinse grains/legumes.",
+    // Evidențiem toate legumele, grânele și leguminoasele
+    ingredientIds: allItems
+      .filter(
+        (item) =>
+          item.groupName.includes("Veggies") ||
+          item.groupName.includes("Grains") ||
+          item.groupName.includes("Legumes")
+      )
+      .map((item) => item.id),
   });
 
+  // --- MODIFICARE 2: Adăugăm ingredientIds la pașii specifici și grupați ---
   allItems.forEach((item) => {
     if (
       item.groupName === "Chopped Aromatics" ||
       item.groupName === "Chopped Veggies"
     ) {
       if (!steps.some((s) => s.id === "step_chop_all")) {
+        const itemsToChop = allItems.filter(
+          (i) =>
+            i.groupName === "Chopped Aromatics" ||
+            i.groupName === "Chopped Veggies"
+        );
         steps.push({
           id: "step_chop_all",
-          text: "Chop all aromatics (onions, garlic) and vegetables (carrots, celery, etc.).",
+          text: `Chop all aromatics and vegetables: ${itemsToChop
+            .map((i) => i.name)
+            .join(", ")}.`,
+          ingredientIds: itemsToChop.map((i) => i.id), // Adăugăm ID-urile tuturor legumelor de tăiat
         });
       }
-      return;
+      return; // Trecem la următorul item pentru a nu adăuga pași duplicați
     }
 
+    // Pas individual pentru fiecare alt item
     steps.push({
       id: `step_${item.id}`,
       text: `${item.method} ${item.totalAmount}${item.unit || ""} of ${
         item.name
       }.`,
+      ingredientIds: [item.id], // Adăugăm ID-ul ingredientului curent
     });
   });
 
+  // --- MODIFICARE 3: Adăugăm ingredientIds la pasul final ---
   steps.push({
     id: "step_cool",
     text: "Let all cooked components cool down before storing them in separate containers in the fridge.",
+    ingredientIds: allItems.map((item) => item.id), // Evidențiem toate ingredientele
   });
 
   const uniqueSteps = Array.from(
