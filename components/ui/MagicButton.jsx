@@ -5,9 +5,14 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "./button";
 
-export const MagicButton = ({ children, onClick, ...props }) => {
+export const MagicButton = ({
+  children,
+  onClick,
+  isWiping,
+  onWipeComplete,
+  ...props
+}) => {
   const [ripple, setRipple] = useState(null);
-  const [isWiping, setIsWiping] = useState(false);
 
   const handleClick = (e) => {
     const button = e.currentTarget;
@@ -17,11 +22,6 @@ export const MagicButton = ({ children, onClick, ...props }) => {
     const y = e.clientY - rect.top - size / 2;
 
     setRipple({ x, y, size });
-
-    // Dacă butonul este de tip "submit", pornim animația de wipe
-    if (props.type === "submit") {
-      setIsWiping(true);
-    }
 
     if (onClick) {
       onClick(e);
@@ -65,6 +65,7 @@ export const MagicButton = ({ children, onClick, ...props }) => {
             initial={{ scale: 0 }}
             animate={{ scale: 150 }} // Un număr mare pentru a acoperi ecranul
             transition={{ duration: 0.8, ease: "easeIn" }}
+            onAnimationComplete={onWipeComplete}
             className="fixed top-1/2 left-1/2 w-16 h-16 bg-blue-600 rounded-full z-50"
             style={{ x: "-50%", y: "-50%" }}
           />

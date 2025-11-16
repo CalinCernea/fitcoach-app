@@ -1,7 +1,7 @@
 // app/(app)/(auth)/login/page.jsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/utils/supabase";
@@ -16,6 +16,22 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isWiping, setIsWiping] = useState(false);
+  const [emailTouched, setEmailTouched] = useState(false);
+  const [passwordTouched, setPasswordTouched] = useState(false);
+
+  const emailValidationState = useMemo(() => {
+    if (!emailTouched) return null;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email) ? "valid" : "invalid";
+  }, [email, emailTouched]);
+
+  const passwordValidationState = useMemo(() => {
+    if (!passwordTouched) return null;
+    // Pentru login, o simplă verificare că nu e gol este suficientă.
+    // Putem păstra și regula de 6 caractere dacă dorim consistență.
+    return password.length >= 6 ? "valid" : "invalid";
+  }, [password, passwordTouched]);
 
   useEffect(() => {
     // Când componenta se montează, adaugă clasa pe body
@@ -42,11 +58,16 @@ export default function LoginPage() {
       setError(error.message);
       setLoading(false);
     } else {
-      // --- MODIFICARE PENTRU TRANZIȚIE ---
-      // Setăm flag-ul în localStorage și navigăm
+      // Setăm flag-ul și pornim animația
       localStorage.setItem("playWipeTransition", "true");
-      router.push("/dashboard");
+      setIsWiping(true);
+      // Nu mai facem redirect aici, așteptăm finalul animației
     }
+  };
+
+  // Funcție nouă pentru a gestiona finalul animației
+  const handleWipeComplete = () => {
+    router.push("/dashboard");
   };
 
   return (
@@ -73,6 +94,8 @@ export default function LoginPage() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            onBlur={() => setEmailTouched(true)}
+            validationState={emailValidationState}
           />
 
           <FloatingLabelInput
@@ -82,6 +105,8 @@ export default function LoginPage() {
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            onBlur={() => setPasswordTouched(true)}
+            validationState={passwordValidationState}
           />
 
           <AnimatePresence>
@@ -101,7 +126,13 @@ export default function LoginPage() {
             type="submit"
             size="lg"
             className="w-full text-lg p-6 bg-blue-600 hover:bg-blue-700"
-            disabled={loading}
+            disabled={
+              loading ||
+              emailValidationState !== "valid" ||
+              passwordValidationState !== "valid"
+            }
+            isWiping={isWiping}
+            onWipeComplete={handleWipeComplete}
           >
             {loading ? (
               <Loader2 className="animate-spin" />
