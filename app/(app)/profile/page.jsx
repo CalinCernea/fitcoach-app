@@ -46,6 +46,16 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
+const GlobalStyles = () => (
+  <style jsx global>{`
+    html,
+    body {
+      overflow: hidden !important;
+      height: 100% !important;
+    }
+  `}</style>
+);
+
 const foodOptions = Object.entries(ingredients).map(([key, value]) => ({
   value: key,
   label: value.name,
@@ -204,248 +214,251 @@ export default function ProfilePage() {
     return <div className="text-center">No profile data found.</div>;
 
   return (
-    <div className="w-full min-h-screen bg-slate-50 dark:bg-slate-950 flex justify-center p-4 sm:p-6 md:p-8">
-      <div className="w-full max-w-6xl flex flex-col md:flex-row gap-8">
-        {/* ================== COLOANA STÂNGĂ: NAVIGARE ================== */}
-        <aside className="w-full md:w-1/4 lg:w-1/5 flex-shrink-0">
-          <div className="sticky top-8 space-y-6">
-            <div className="flex flex-col items-center text-center p-4 rounded-2xl bg-white dark:bg-slate-900 shadow-sm">
-              <div className="relative h-24 w-24 rounded-full bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center text-white text-4xl font-bold mb-3">
-                {profileData.name ? (
-                  profileData.name.charAt(0).toUpperCase()
-                ) : (
-                  <User />
-                )}
-              </div>
-              <h2 className="text-xl font-bold">{profileData.name}</h2>
-              <p className="text-sm text-slate-500">{profileData.email}</p>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="mt-4"
-                onClick={() => {
-                  if (needsPlanRefresh) {
-                    // Dacă este nevoie de refresh, navigăm cu parametrul special
-                    router.push("/dashboard?refresh=true");
-                  } else {
-                    // Altfel, navigăm normal
-                    router.push("/dashboard");
-                  }
-                }}
-              >
-                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
-              </Button>
-            </div>
-            <nav className="space-y-2">
-              <TabButton
-                icon={User}
-                label="Personal Details"
-                isActive={activeTab === "details"}
-                onClick={() => setActiveTab("details")}
-              />
-              <TabButton
-                icon={Target}
-                label="Goals & Metrics"
-                isActive={activeTab === "goals"}
-                onClick={() => setActiveTab("goals")}
-              />
-              <TabButton
-                icon={Utensils}
-                label="Food Preferences"
-                isActive={activeTab === "prefs"}
-                onClick={() => setActiveTab("prefs")}
-              />
-              <TabButton
-                icon={Heart}
-                label="My Progress"
-                isActive={activeTab === "progress"}
-                onClick={() => setActiveTab("progress")}
-              />
-            </nav>
-          </div>
-        </aside>
-
-        {/* ================== COLOANA DREAPTĂ: CONȚINUT ================== */}
-        <main className="w-full md:w-3/4 lg:w-4/5">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3, ease: "circOut" }}
-            >
-              {activeTab === "details" && (
-                <SectionWrapper title="Personal Details">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <EditableField
-                      label="Full Name"
-                      field="name"
-                      value={profileData.name}
-                      onChange={handleChange}
-                      status={savingStatus.name}
-                    />
-                    <EditableField
-                      label="Date of Birth"
-                      field="dob"
-                      type="date"
-                      value={profileData.dob}
-                      onChange={handleChange}
-                      status={savingStatus.dob}
-                    />
-                  </div>
-                </SectionWrapper>
-              )}
-              {activeTab === "goals" && (
-                <SectionWrapper title="Goals & Metrics">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <EditableField
-                      label="Height (cm)"
-                      field="height"
-                      type="number"
-                      value={profileData.height}
-                      onChange={handleChange}
-                      status={savingStatus.height}
-                    />
-                    <EditableField
-                      label="Current Weight (kg)"
-                      field="weight"
-                      type="number"
-                      step="0.1"
-                      value={profileData.weight}
-                      onChange={handleChange}
-                      status={savingStatus.weight}
-                    />
-                    <EditableSelect
-                      label="Activity Level"
-                      field="activity"
-                      value={profileData.activity}
-                      onChange={handleChange}
-                      status={savingStatus.activity}
-                      options={[
-                        { value: "sedentary", label: "Sedentary" },
-                        { value: "lightly_active", label: "Lightly Active" },
-                        { value: "active", label: "Active" },
-                        { value: "very_active", label: "Very Active" },
-                      ]}
-                    />
-                    <EditableSelect
-                      label="Primary Goal"
-                      field="goal"
-                      value={profileData.goal}
-                      onChange={handleChange}
-                      status={savingStatus.goal}
-                      options={[
-                        { value: "lose_weight", label: "Lose Weight" },
-                        { value: "get_leaner", label: "Get Leaner" },
-                        { value: "gain_muscle", label: "Gain Muscle" },
-                        { value: "gain_strength", label: "Gain Strength" },
-                        {
-                          value: "overall_health",
-                          label: "Improve Overall Health",
-                        },
-                      ]}
-                    />
-                  </div>
-                </SectionWrapper>
-              )}
-              {activeTab === "prefs" && (
-                <SectionWrapper title="Food Preferences">
-                  <div className="space-y-8">
-                    <div>
-                      <Label className="text-base font-semibold">
-                        Foods I Like
-                      </Label>
-                      <p className="text-sm text-muted-foreground mb-3">
-                        We'll try to include these more often.
-                      </p>
-                      <MultiSelect
-                        options={foodOptions}
-                        selected={profileData.liked_foods}
-                        onChange={(selected) =>
-                          handleChange("liked_foods", selected, "Liked foods")
-                        }
-                        placeholder="Select your favorite foods..."
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-base font-semibold">
-                        Foods I Dislike / Allergies
-                      </Label>
-                      <p className="text-sm text-muted-foreground mb-3">
-                        We will exclude these from your meal plan.
-                      </p>
-                      <MultiSelect
-                        options={foodOptions}
-                        selected={profileData.disliked_foods}
-                        onChange={(selected) =>
-                          handleChange(
-                            "disliked_foods",
-                            selected,
-                            "Disliked foods"
-                          )
-                        }
-                        placeholder="Select foods to avoid..."
-                      />
-                    </div>
-                  </div>
-                </SectionWrapper>
-              )}
-              {activeTab === "progress" && (
-                <SectionWrapper title="My Progress">
-                  {loadingLog ? (
-                    <div className="text-center p-8">
-                      Loading progress chart...
-                    </div>
-                  ) : weightLog.length > 1 ? (
-                    <div className="h-80 w-full bg-white dark:bg-slate-900 p-4 rounded-xl">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart
-                          data={weightLog}
-                          margin={{ top: 5, right: 20, left: -10, bottom: 5 }}
-                        >
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            strokeOpacity={0.2}
-                          />
-                          <XAxis dataKey="date" />
-                          <YAxis
-                            domain={["dataMin - 2", "dataMax + 2"]}
-                            allowDecimals={false}
-                          />
-                          <Tooltip
-                            contentStyle={{
-                              backgroundColor: "rgba(255, 255, 255, 0.8)",
-                              backdropFilter: "blur(4px)",
-                              borderRadius: "0.5rem",
-                              border: "1px solid rgba(0, 0, 0, 0.1)",
-                            }}
-                          />
-                          <motion.g>
-                            <Line
-                              type="monotone"
-                              dataKey="weight"
-                              stroke="#3b82f6"
-                              strokeWidth={3}
-                              dot={{ r: 5 }}
-                              activeDot={{ r: 8 }}
-                            />
-                          </motion.g>
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
+    <>
+      <GlobalStyles />
+      <div className="w-full h-screen bg-slate-50 dark:bg-slate-950 flex justify-center p-4 sm:p-6 md:p-8">
+        <div className="w-full max-w-6xl flex flex-col md:flex-row gap-8 h-full">
+          {/* ================== COLOANA STÂNGĂ: NAVIGARE ================== */}
+          <aside className="w-full md:w-1/4 lg:w-1/5 flex-shrink-0">
+            <div className="sticky top-8 space-y-6">
+              <div className="flex flex-col items-center text-center p-4 rounded-2xl bg-white dark:bg-slate-900 shadow-sm">
+                <div className="relative h-24 w-24 rounded-full bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center text-white text-4xl font-bold mb-3">
+                  {profileData.name ? (
+                    profileData.name.charAt(0).toUpperCase()
                   ) : (
-                    <p className="text-center text-slate-500 p-8">
-                      Not enough data to display a chart.
-                    </p>
+                    <User />
                   )}
-                </SectionWrapper>
-              )}
-            </motion.div>
-          </AnimatePresence>
-        </main>
+                </div>
+                <h2 className="text-xl font-bold">{profileData.name}</h2>
+                <p className="text-sm text-slate-500">{profileData.email}</p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mt-4"
+                  onClick={() => {
+                    if (needsPlanRefresh) {
+                      // Dacă este nevoie de refresh, navigăm cu parametrul special
+                      router.push("/dashboard?refresh=true");
+                    } else {
+                      // Altfel, navigăm normal
+                      router.push("/dashboard");
+                    }
+                  }}
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
+                </Button>
+              </div>
+              <nav className="space-y-2">
+                <TabButton
+                  icon={User}
+                  label="Personal Details"
+                  isActive={activeTab === "details"}
+                  onClick={() => setActiveTab("details")}
+                />
+                <TabButton
+                  icon={Target}
+                  label="Goals & Metrics"
+                  isActive={activeTab === "goals"}
+                  onClick={() => setActiveTab("goals")}
+                />
+                <TabButton
+                  icon={Utensils}
+                  label="Food Preferences"
+                  isActive={activeTab === "prefs"}
+                  onClick={() => setActiveTab("prefs")}
+                />
+                <TabButton
+                  icon={Heart}
+                  label="My Progress"
+                  isActive={activeTab === "progress"}
+                  onClick={() => setActiveTab("progress")}
+                />
+              </nav>
+            </div>
+          </aside>
+
+          {/* ================== COLOANA DREAPTĂ: CONȚINUT ================== */}
+          <main className="w-full md:w-3/4 lg:w-4/5 overflow-y-auto pb-8 pr-2">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3, ease: "circOut" }}
+              >
+                {activeTab === "details" && (
+                  <SectionWrapper title="Personal Details">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <EditableField
+                        label="Full Name"
+                        field="name"
+                        value={profileData.name}
+                        onChange={handleChange}
+                        status={savingStatus.name}
+                      />
+                      <EditableField
+                        label="Date of Birth"
+                        field="dob"
+                        type="date"
+                        value={profileData.dob}
+                        onChange={handleChange}
+                        status={savingStatus.dob}
+                      />
+                    </div>
+                  </SectionWrapper>
+                )}
+                {activeTab === "goals" && (
+                  <SectionWrapper title="Goals & Metrics">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <EditableField
+                        label="Height (cm)"
+                        field="height"
+                        type="number"
+                        value={profileData.height}
+                        onChange={handleChange}
+                        status={savingStatus.height}
+                      />
+                      <EditableField
+                        label="Current Weight (kg)"
+                        field="weight"
+                        type="number"
+                        step="0.1"
+                        value={profileData.weight}
+                        onChange={handleChange}
+                        status={savingStatus.weight}
+                      />
+                      <EditableSelect
+                        label="Activity Level"
+                        field="activity"
+                        value={profileData.activity}
+                        onChange={handleChange}
+                        status={savingStatus.activity}
+                        options={[
+                          { value: "sedentary", label: "Sedentary" },
+                          { value: "lightly_active", label: "Lightly Active" },
+                          { value: "active", label: "Active" },
+                          { value: "very_active", label: "Very Active" },
+                        ]}
+                      />
+                      <EditableSelect
+                        label="Primary Goal"
+                        field="goal"
+                        value={profileData.goal}
+                        onChange={handleChange}
+                        status={savingStatus.goal}
+                        options={[
+                          { value: "lose_weight", label: "Lose Weight" },
+                          { value: "get_leaner", label: "Get Leaner" },
+                          { value: "gain_muscle", label: "Gain Muscle" },
+                          { value: "gain_strength", label: "Gain Strength" },
+                          {
+                            value: "overall_health",
+                            label: "Improve Overall Health",
+                          },
+                        ]}
+                      />
+                    </div>
+                  </SectionWrapper>
+                )}
+                {activeTab === "prefs" && (
+                  <SectionWrapper title="Food Preferences">
+                    <div className="space-y-8">
+                      <div>
+                        <Label className="text-base font-semibold">
+                          Foods I Like
+                        </Label>
+                        <p className="text-sm text-muted-foreground mb-3">
+                          We'll try to include these more often.
+                        </p>
+                        <MultiSelect
+                          options={foodOptions}
+                          selected={profileData.liked_foods}
+                          onChange={(selected) =>
+                            handleChange("liked_foods", selected, "Liked foods")
+                          }
+                          placeholder="Select your favorite foods..."
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-base font-semibold">
+                          Foods I Dislike / Allergies
+                        </Label>
+                        <p className="text-sm text-muted-foreground mb-3">
+                          We will exclude these from your meal plan.
+                        </p>
+                        <MultiSelect
+                          options={foodOptions}
+                          selected={profileData.disliked_foods}
+                          onChange={(selected) =>
+                            handleChange(
+                              "disliked_foods",
+                              selected,
+                              "Disliked foods"
+                            )
+                          }
+                          placeholder="Select foods to avoid..."
+                        />
+                      </div>
+                    </div>
+                  </SectionWrapper>
+                )}
+                {activeTab === "progress" && (
+                  <SectionWrapper title="My Progress">
+                    {loadingLog ? (
+                      <div className="text-center p-8">
+                        Loading progress chart...
+                      </div>
+                    ) : weightLog.length > 1 ? (
+                      <div className="h-80 w-full bg-white dark:bg-slate-900 p-4 rounded-xl">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart
+                            data={weightLog}
+                            margin={{ top: 5, right: 20, left: -10, bottom: 5 }}
+                          >
+                            <CartesianGrid
+                              strokeDasharray="3 3"
+                              strokeOpacity={0.2}
+                            />
+                            <XAxis dataKey="date" />
+                            <YAxis
+                              domain={["dataMin - 2", "dataMax + 2"]}
+                              allowDecimals={false}
+                            />
+                            <Tooltip
+                              contentStyle={{
+                                backgroundColor: "rgba(255, 255, 255, 0.8)",
+                                backdropFilter: "blur(4px)",
+                                borderRadius: "0.5rem",
+                                border: "1px solid rgba(0, 0, 0, 0.1)",
+                              }}
+                            />
+                            <motion.g>
+                              <Line
+                                type="monotone"
+                                dataKey="weight"
+                                stroke="#3b82f6"
+                                strokeWidth={3}
+                                dot={{ r: 5 }}
+                                activeDot={{ r: 8 }}
+                              />
+                            </motion.g>
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    ) : (
+                      <p className="text-center text-slate-500 p-8">
+                        Not enough data to display a chart.
+                      </p>
+                    )}
+                  </SectionWrapper>
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </main>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
