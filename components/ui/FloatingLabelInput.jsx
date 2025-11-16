@@ -17,7 +17,7 @@ export const FloatingLabelInput = ({
 
   const labelVariants = {
     initial: { top: "50%", y: "-50%", fontSize: "1.125rem" },
-    float: { top: "0.5rem", y: "0%", fontSize: "0.75rem", color: "#3b82f6" },
+    float: { top: "0.05rem", y: "0%", fontSize: "0.75rem", color: "#3b82f6" },
   };
 
   return (

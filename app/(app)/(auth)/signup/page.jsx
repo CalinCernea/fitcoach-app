@@ -184,7 +184,11 @@ export default function SignUpPage() {
                 type="submit"
                 size="lg"
                 className="w-full text-lg p-6 bg-blue-600 hover:bg-blue-700"
-                disabled={loading}
+                disabled={
+                  loading ||
+                  emailValidationState !== "valid" ||
+                  passwordValidationState !== "valid"
+                }
               >
                 {loading ? (
                   <Loader2 className="animate-spin" />
