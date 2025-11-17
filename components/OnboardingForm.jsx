@@ -185,9 +185,16 @@ export function OnboardingForm() {
           <Button
             variant="ghost"
             onClick={handleNext}
+            disabled={step === 1 && formData.name.trim() === ""} // <-- CONDIȚIA DE DEZACTIVARE
             className={
-              // Butonul este ascuns doar la pasul de obiectiv (3) și la ultimul pas (6)
-              step === 3 || step >= totalSteps ? "invisible" : "visible"
+              // Ascunde butonul la pașii 3 și 6
+              step === 3 || step >= totalSteps
+                ? "invisible"
+                : // La pasul 1, dacă numele e gol, fă-l transparent și nu interactiv
+                step === 1 && formData.name.trim() === ""
+                ? "opacity-50 cursor-not-allowed"
+                : // Altfel, fă-l vizibil
+                  "visible"
             }
           >
             Next <ArrowRight className="ml-2 w-4 h-4" />
