@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { Silhouette } from "./icons/Silhouette";
+import { SilhouetteMale } from "./icons/SilhouetteMale";
+import { SilhouetteFemale } from "./icons/SilhouetteFemale";
 import { Player } from "@lottiefiles/react-lottie-player";
 import {
   AnimatePresence,
@@ -484,8 +485,10 @@ const StepGoal = ({ name, value, onChange, onNext }) => {
   );
 };
 
+// Înlocuiește complet funcția StepMeasurements din OnboardingForm.jsx
+
 const StepMeasurements = ({ formData, onChange }) => {
-  // Logica pentru animația siluetei (neschimbată)
+  // Logica pentru animația de scalare
   const heightMotion = useSpring(formData.height, {
     stiffness: 200,
     damping: 30,
@@ -498,7 +501,6 @@ const StepMeasurements = ({ formData, onChange }) => {
   useEffect(() => {
     heightMotion.set(formData.height);
   }, [formData.height, heightMotion]);
-
   useEffect(() => {
     weightMotion.set(formData.weight);
   }, [formData.weight, weightMotion]);
@@ -509,9 +511,7 @@ const StepMeasurements = ({ formData, onChange }) => {
   return (
     <div className="flex flex-col h-full">
       <AnimatedTitle>What are your current stats?</AnimatedTitle>
-
-      <div className="flex-grow grid grid-cols-3 gap-6 items-center -mt-8">
-        {/* Slider Înălțime */}
+      <div className="flex-grow grid grid-cols-3 gap-6 items-center pt-8">
         <div className="flex flex-col items-center justify-center h-full">
           <label className="text-sm font-medium text-slate-500 mb-2">
             Height
@@ -527,21 +527,21 @@ const StepMeasurements = ({ formData, onChange }) => {
             orient="vertical"
           />
         </div>
-
-        {/* Silueta Centrală cu layoutId */}
         <div className="relative flex flex-col items-center justify-center h-full">
           <motion.div
             layoutId="onboarding-icon-morph"
-            className="h-full max-h-64"
+            className="h-full max-h-56"
+            style={{
+              scaleY,
+              scaleX,
+              transformOrigin: "bottom center",
+            }}
           >
-            <Silhouette
-              className="h-full text-slate-300 dark:text-slate-700"
-              style={{
-                scaleY,
-                scaleX,
-                transformOrigin: "bottom center",
-              }}
-            />
+            {formData.sex === "female" ? (
+              <SilhouetteFemale className="h-full w-auto mx-auto text-slate-300 dark:text-slate-700" />
+            ) : (
+              <SilhouetteMale className="h-full w-auto mx-auto text-slate-300 dark:text-slate-700" />
+            )}
           </motion.div>
           <div className="absolute bottom-0 translate-y-12 flex gap-8 text-center">
             <div>
@@ -558,8 +558,6 @@ const StepMeasurements = ({ formData, onChange }) => {
             </div>
           </div>
         </div>
-
-        {/* Slider Greutate */}
         <div className="flex flex-col items-center justify-center h-full">
           <label className="text-sm font-medium text-slate-500 mb-2">
             Weight
