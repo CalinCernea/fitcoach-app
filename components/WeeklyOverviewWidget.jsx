@@ -23,9 +23,9 @@ export function WeeklyOverviewWidget({
   changeWeek,
 }) {
   return (
-    <Card className="h-full flex flex-col">
-      <CardHeader className="flex-row items-center justify-between">
-        <CardTitle>Weekly View</CardTitle>
+    <Card className="h-full flex flex-col justify-between">
+      <CardHeader className="flex-row items-center justify-between pb-2 flex-shrink-0">
+        <CardTitle className="text-lg">Weekly View</CardTitle>
         <div className="flex gap-2">
           <Button
             variant="outline"
@@ -45,7 +45,7 @@ export function WeeklyOverviewWidget({
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="flex-grow grid grid-cols-7 gap-2">
+      <CardContent className="flex-1 grid grid-cols-7 gap-2 pt-2 pb-2 min-h-0">
         {Array.from({ length: 7 }).map((_, i) => {
           const dayDate = addDays(startOfWeek, i);
           const dayString = getFormattedDate(dayDate);
@@ -56,16 +56,16 @@ export function WeeklyOverviewWidget({
             <button
               key={dayString}
               onClick={() => onDaySelect(dayDate)}
-              className={`flex flex-col items-center justify-center p-2 rounded-lg text-center border-2 transition-all duration-200 h-full ${
+              className={`flex flex-col items-center justify-center p-1.5 rounded-lg text-center border-2 transition-all duration-200 h-full ${
                 isSelected
                   ? "border-blue-500 bg-blue-100 dark:bg-blue-900/50 shadow-md"
                   : "border-transparent hover:bg-slate-100 dark:hover:bg-slate-800"
               }`}
             >
-              <p className="font-bold text-sm">
+              <p className="font-bold text-xs">
                 {dayDate.toLocaleDateString("en-US", { weekday: "short" })}
               </p>
-              <p className="text-xs text-slate-500 mb-2">{dayDate.getDate()}</p>
+              <p className="text-xs text-slate-500 mb-1">{dayDate.getDate()}</p>
               {plan ? (
                 <div className="text-xs font-semibold">
                   {Math.round(plan.totals.calories)}

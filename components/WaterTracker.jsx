@@ -116,29 +116,29 @@ export function WaterTracker({ userId, dailyTarget }) {
   const progress = dailyTarget > 0 ? (consumed / dailyTarget) * 100 : 0;
 
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+    <Card className="w-full h-full flex flex-col">
+      <CardHeader className="pb-2 flex-shrink-0">
+        <CardTitle className="flex items-center gap-2 text-lg">
           <GlassWater className="text-blue-500" />
           Daily Water Intake
         </CardTitle>
       </CardHeader>
-      <CardContent className="flex flex-col items-center gap-4 pt-4">
+      <CardContent className="flex-1 flex flex-col items-center justify-center gap-3 pb-3">
         <div
-          className="relative h-24 w-24 rounded-full flex items-center justify-center bg-blue-100 dark:bg-blue-900/30 overflow-hidden"
+          className="relative h-20 w-20 rounded-full flex items-center justify-center bg-blue-100 dark:bg-blue-900/30 overflow-hidden"
           title={`${Math.round(progress)}%`}
         >
           <div
             className="absolute bottom-0 left-0 right-0 bg-blue-500 transition-all duration-500"
             style={{ height: `${progress}%` }}
           ></div>
-          <GlassWater className="relative h-12 w-12 text-blue-600 dark:text-blue-400" />
+          <GlassWater className="relative h-10 w-10 text-blue-600 dark:text-blue-400" />
         </div>
 
         <div className="text-center">
-          <p className="text-2xl font-bold">
+          <p className="text-xl font-bold">
             {consumed.toLocaleString()}
-            <span className="text-base font-normal text-slate-500">
+            <span className="text-sm font-normal text-slate-500">
               {" "}
               / {dailyTarget.toLocaleString()} ml
             </span>
@@ -146,40 +146,38 @@ export function WaterTracker({ userId, dailyTarget }) {
           <p className="text-sm text-slate-500">Today's Goal</p>
         </div>
 
-        <div className="flex justify-center w-full">
-          {/* --- MODIFICARE: Elimină w-full de aici pentru a permite centrarea --- */}
-          <div className="grid grid-cols-4 gap-2">
-            <Button
-              variant="outline"
-              onClick={() => handleAddWater(250)}
-              disabled={isUpdating}
-            >
-              <Plus className="mr-1 h-4 w-4" /> 250ml
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => handleAddWater(500)}
-              disabled={isUpdating}
-            >
-              <Plus className="mr-1 h-4 w-4" /> 500ml
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => handleAddWater(750)}
-              disabled={isUpdating}
-            >
-              <Plus className="mr-1 h-4 w-4" /> 750ml
-            </Button>
-            <Button
-              variant="destructive"
-              size="icon"
-              onClick={handleRemoveLast}
-              disabled={isUpdating || consumed === 0}
-              title="Remove last entry"
-            >
-              <Minus className="h-4 w-4" />
-            </Button>
-          </div>
+        {/* --- MODIFICARE: Elimină w-full de aici pentru a permite centrarea --- */}
+        <div className="grid grid-cols-4 gap-2 pl-8">
+          <Button
+            variant="outline"
+            onClick={() => handleAddWater(250)}
+            disabled={isUpdating}
+          >
+            <Plus className="mr-1 h-4 w-4" /> 250ml
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => handleAddWater(500)}
+            disabled={isUpdating}
+          >
+            <Plus className="mr-1 h-4 w-4" /> 500ml
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => handleAddWater(750)}
+            disabled={isUpdating}
+          >
+            <Plus className="mr-1 h-4 w-4" /> 750ml
+          </Button>
+          <Button
+            variant="destructive"
+            size="icon"
+            onClick={handleRemoveLast}
+            disabled={isUpdating || consumed === 0}
+            title="Remove last entry"
+          >
+            <Minus className="h-4 w-4" />
+          </Button>
         </div>
       </CardContent>
     </Card>

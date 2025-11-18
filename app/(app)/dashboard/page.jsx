@@ -167,6 +167,16 @@ export default function DashboardPage() {
   const [playEntryAnimation, setPlayEntryAnimation] = useState(false);
 
   useEffect(() => {
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = "auto";
+      document.documentElement.style.overflow = "auto";
+    };
+  }, []);
+
+  useEffect(() => {
     const shouldPlay = localStorage.getItem("playWipeTransition");
     if (shouldPlay === "true") {
       // Setăm starea pe true pentru a declanșa AnimatePresence
@@ -591,10 +601,8 @@ export default function DashboardPage() {
   }
 
   return (
-    // --- NOU: Container exterior relativ ---
-    <div className="relative w-full">
-      {/* Conținutul tău existent este acum în interiorul acestui div */}
-      <div className="w-full max-w-6xl mx-auto p-4 md:p-6">
+    <div className="fixed inset-0 overflow-hidden">
+      <div className="w-full max-w-7xl mx-auto p-4 flex flex-col h-full overflow-hidden">
         <Suspense fallback={null}>
           <RefreshHandler
             profile={profile}
@@ -603,11 +611,19 @@ export default function DashboardPage() {
           />
         </Suspense>
 
-        <header className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+        <header className="flex flex-col md:flex-row justify-between items-center mb-4 gap-3 flex-shrink-0">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold">
-              Welcome, {profile.name || "User"}!
-            </h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl md:text-3xl font-bold">
+                Welcome, {profile.name || "User"}!
+              </h1>
+              {preppedComponents && (
+                <Badge className="bg-green-500 text-white flex items-center gap-1">
+                  <Sparkles className="h-3 w-3" />
+                  Prep Mode
+                </Badge>
+              )}
+            </div>
             <p className="text-slate-500">Your command center is ready.</p>
           </div>
           <div className="flex items-center gap-2">
@@ -676,46 +692,51 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        {preppedComponents && (
-          <Card className="mb-6 border-green-500 bg-green-50 dark:bg-green-900/20">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-green-600" />
-                <p className="text-green-700 dark:text-green-400 font-medium">
-                  Prep Mode Active! Your meals are using prepped components.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {!currentPlan ? (
-          <div className="flex items-center justify-center h-96">
+          <div className="flex items-center justify-center flex-grow">
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <TodaysMission
-              profile={profile}
-              plan={currentPlan}
-              onViewMeal={(meal) => {
-                setSelectedMeal(meal);
-                setIsMealDetailOpen(true);
-              }}
-              onToggleMealConsumed={handleToggleMealConsumed}
-            />
-            <MacroTracker profile={profile} plan={currentPlan} />
-            <WeeklyOverviewWidget
-              plans={weeklyPlans}
-              currentDate={currentDate}
-              startOfWeek={startOfWeek}
-              onDaySelect={handleDaySelect}
-              changeWeek={changeWeek}
-            />
-            <WaterTracker
-              userId={profile.id}
-              dailyTarget={profile.daily_water_target || 2500}
-            />
+          <div
+            className="flex-grow grid gap-4 min-h-0"
+            style={{ gridTemplateRows: "1.15fr 1fr" }}
+          >
+            {/* Primul rând: Today's Mission (mai mare) + Macro Tracker (mai mic) */}
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 min-h-0 overflow-hidden">
+              <div className="lg:col-span-3 h-full overflow-hidden">
+                <TodaysMission
+                  profile={profile}
+                  plan={currentPlan}
+                  onViewMeal={(meal) => {
+                    setSelectedMeal(meal);
+                    setIsMealDetailOpen(true);
+                  }}
+                  onToggleMealConsumed={handleToggleMealConsumed}
+                />
+              </div>
+              <div className="lg:col-span-2 h-full overflow-hidden">
+                <MacroTracker profile={profile} plan={currentPlan} />
+              </div>
+            </div>
+
+            {/* Al doilea rând: Weekly View (mai mic) + Water Tracker (mai mare) */}
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 min-h-0 overflow-hidden">
+              <div className="lg:col-span-2 h-full overflow-hidden">
+                <WeeklyOverviewWidget
+                  plans={weeklyPlans}
+                  currentDate={currentDate}
+                  startOfWeek={startOfWeek}
+                  onDaySelect={handleDaySelect}
+                  changeWeek={changeWeek}
+                />
+              </div>
+              <div className="lg:col-span-3 h-full overflow-hidden">
+                <WaterTracker
+                  userId={profile.id}
+                  dailyTarget={profile.daily_water_target || 2500}
+                />
+              </div>
+            </div>
           </div>
         )}
 
