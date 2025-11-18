@@ -2,6 +2,7 @@
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/react"; // <-- Pasul 2.1: Importă
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -16,6 +17,7 @@ export default function RootLayout({ children }) {
       <body className={inter.className}>
         {children}
         <Analytics /> {/* <-- Pasul 2.2: Adaugă componenta aici */}
+        <SpeedInsights />
       </body>
     </html>
   );
