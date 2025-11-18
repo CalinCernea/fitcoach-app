@@ -102,9 +102,3 @@
   background-size: 400% 400%;
   animation: gradient-animation 15s ease infinite;
 }
-
-html,
-body {
-  overflow: hidden;
-  height: 100%;
-}
