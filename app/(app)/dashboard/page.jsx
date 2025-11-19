@@ -69,6 +69,7 @@ import { MacroTracker } from "@/components/MacroTracker";
 import { WeeklyOverviewWidget } from "@/components/WeeklyOverviewWidget";
 import { MealDetailDialog } from "@/components/MealDetailDialog";
 import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
 
 // Helper Functions
 const getFormattedDate = (date) => date.toISOString().split("T")[0];
@@ -244,11 +245,20 @@ export default function DashboardPage() {
     setLoading(true);
     const {
       data: { session },
+      error: sessionError,
     } = await supabase.auth.getSession();
-    if (!session) {
-      router.push("/login");
+
+    if (sessionError || !session) {
+      toast.error("Your session has expired. Please login again.", {
+        duration: 3000,
+      });
+      await supabase.auth.signOut();
+      setTimeout(() => {
+        router.push("/login");
+      }, 1500);
       return;
     }
+
     const user = session.user;
     const { data: userProfile, error: profileError } = await supabase
       .from("profiles")
